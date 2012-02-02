@@ -1,0 +1,24 @@
+imageAlignement is a python wrapper for various algorithm described in IPOL and doing image alignment:
+http://www.ipol.im/ 
+
+Wrapper made by Jerome Kieffer (jerome.kieffer@esrf.fr) and released under the LGPL.
+Copyright: 2012 ESRF Grenoble 
+
+1) Installation
+
+python setup.py build_ext --inplace
+
+2) Test
+
+python test.py 
+
+This wrapper relies on code published in IPOL:
+SURF & SIFT: 
+ * Webpage:	http://www.ipol.im/pub/algo/or_speeded_up_robust_features/
+ * Authors: edouard.oyallon@ens-cachan.fr, for CMLA & IPOL, under the direction of julien.rabin@cmla.ens-cachan.fr
+ORSA: 
+ * Webpage:	http://www.ipol.im/pub/algo/mmm_orsa_homography/
+ * Authors:  Lionel Moisan <lionel.moisan@parisdescartes.fr>, Pierre Moulon <pmo@mikrosimage.eu>, Pascal Monasse <monasse@imagine.enpc.fr>
+ASIFT: 
+ * Webpage:	http://dx.doi.org/10.5201/ipol.2011.my-asift
+ * Authors: Guoshen Yu <yu@cmap.polytechnique.fr>, Jean-Michel Morel <morel@cmla.ens-cachan.fr>
