@@ -51,8 +51,8 @@
 #endif
 
 #include "compute_asift_matches.h"
-#include "libMatch/match.h"
-#include "orsa.h"
+#include "../libMatch/match.h"
+#include "../orsa/orsa.h"
 
 
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))

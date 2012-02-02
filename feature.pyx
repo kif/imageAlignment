@@ -115,6 +115,13 @@ cdef extern from "sift/demo_lib_sift.h":
     ctypedef  vector[ matching ] matchingslist
     void compute_sift_matches(keypointslist keys1, keypointslist keys2, matchingslist matchings, siftPar par)
 
+
+cdef extern from "asift/compute_asift_keypoints.h":
+    int compute_asift_keypoints(vector[float] image, int width, int height, int num_of_tilts, int verb, vector[ vector[ keypointslist ]] & keys_all, siftPar siftparameters) nogil
+cdef extern from "asift/compute_asift_matches.h":
+    int compute_asift_matches(int num_of_tilts1, int num_of_tilts2, int w1, int h1, int w2, int h2, int verb, vector[vector[keypointslist]] keys1, vector[vector[keypointslist]] keys2, matchingslist matchings, siftPar siftparameters) nogil
+
+
 def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
     """
     Call surf on a pair of images
@@ -143,12 +150,14 @@ def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
         time_init = time.time()
         listeDesc1 = getKeyPoints(img1, octave, interval, l1, verbose)
         time_int = time.time()
+        print "SURF took %.3fs image1: %i ctrl points" % (time_int - time_init, listeDesc1.size())
+        time_int = time.time()
         listeDesc2 = getKeyPoints(img2, octave, interval, l2, verbose)
+        time_finish = time.time()
+        print "SURF took %.3fs image2: %i ctrl points" % (time_finish - time_int, listeDesc2.size())
         time_finish = time.time()
         matching = matchDescriptor(listeDesc1, listeDesc2)
         time_matching = time.time()
-        print "SURF took %.3fs image1: %i ctrl points" % (time_int - time_init, listeDesc1.size())
-        print "SURF took %.3fs image2: %i ctrl points" % (time_finish - time_int, listeDesc2.size())
         print("Matching %s point, took %.3fs " % (matching.size(), time_matching - time_finish))
     else:
         with nogil:
@@ -180,36 +189,38 @@ def sift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
     img2.img = < float *> data2.data
     cdef keypointslist k1, k2
     cdef siftPar para
-    cdef matchingslist n
+    cdef matchingslist matchings
     default_sift_parameters(para)
     if verbose:
         import time
         t0 = time.time()
         compute_sift_keypoints(< float *> data1.data, k1, data1.shape[1], data1.shape[0], para);
         t1 = time.time()
+        print "SIFT took %.3fs image1: %i ctrl points" % (t1 - t0, k1.size())
+        t1 = time.time()
         compute_sift_keypoints(< float *> data2.data, k2, data2.shape[1], data2.shape[0], para);
         t2 = time.time()
-        print "SIFT took %.3fs image1: %i ctrl points" % (t1 - t0, k1.size())
         print "SIFT took %.3fs image2: %i ctrl points" % (t2 - t1, k2.size())
-        compute_sift_matches(k1, k2, n, para);
-        print("Matching: %s point, took %.3fs " % (n.size(), time.time() - t2))
+        t2 = time.time()
+        compute_sift_matches(k1, k2, matchings, para);
+        print("Matching: %s point, took %.3fs " % (matchings.size(), time.time() - t2))
     else:
         compute_sift_keypoints(< float *> data1.data, k1, data1.shape[1], data1.shape[0], para);
         compute_sift_keypoints(< float *> data2.data, k2, data2.shape[1], data2.shape[0], para);
-        compute_sift_matches(k1, k2, n, para);
+        compute_sift_matches(k1, k2, matchings, para);
 
-#    if n.size > 10:
+#    if matchings.size > 10:
 #        
 #    else:
-    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((n.size(), 4), dtype="float32")
-    for i in range(n.size()):
-        out[i, 0] = n[i].first.y
-        out[i, 1] = n[i].first.x
-        out[i, 2] = n[i].second.y
-        out[i, 3] = n[i].second.x
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype="float32")
+    for i in range(matchings.size()):
+        out[i, 0] = matchings[i].first.y
+        out[i, 1] = matchings[i].first.x
+        out[i, 2] = matchings[i].second.y
+        out[i, 3] = matchings[i].second.x
     return out
 #TODO:
-#        if(n.size() > 10)
+#        if(matchings.size() > 10)
 #        {
 #            std::vector < float > index;
 #            // Guoshen Yu, 2010.09.23
@@ -226,3 +237,72 @@ def sift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
 #
 #            float nfa = orsa((img3 -> w() + img4 -> w()) / 2, (img3 -> h() + img4 -> h()) / 2, match2_coor, index, t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa);
 #            cout << "ORSA(SIFT) said that : " << index.size() << " good matchs. nfa = " << nfa << endl;
+
+
+def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
+    """
+    Call ASIFT on a pair of images
+    @param in1: first image 
+    @type in1: numpy ndarray
+    @param in2: second image 
+    @type in2: numpy ndarray
+    @param verbose: indicate the default verbosity
+    @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
+    """
+    cdef int i
+    cdef int num_of_tilts1 = 7
+    cdef int num_of_tilts2 = 7
+    cdef int verb = < int > verbose
+    cdef siftPar siftparameters
+    default_sift_parameters(siftparameters)
+    cdef vector[ vector[ keypointslist ]] keys1
+    cdef vector[ vector[ keypointslist ]] keys2
+    cdef int num_keys1 = 0, num_keys2 = 0
+    cdef int num_matchings
+    cdef matchingslist matchings
+
+#    cdef vector [ float ] ipixels1_zoom, ipixels2_zoom
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] data1 = numpy.ascontiguousarray(255. * (in1.astype("float32") - in1.min()) / (in1.max() - in1.min()))
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] data2 = numpy.ascontiguousarray(255. * (in2.astype("float32") - in2.min()) / (in2.max() - in2.min()))
+    cdef numpy.ndarray[numpy.float32_t, ndim = 1] fdata1 = data1.flatten()
+    cdef numpy.ndarray[numpy.float32_t, ndim = 1] fdata2 = data2.flatten()
+    cdef vector [ float ] ipixels1_zoom = vector [ float ](< size_t > data1.size)
+    cdef vector [ float ] ipixels2_zoom = vector [ float ](< size_t > data2.size)
+    for i in range(data1.size):
+        ipixels1_zoom[i] = < float > fdata1[i]
+    for i in range(data2.size):
+        ipixels2_zoom[i] = < float > fdata2[i]
+
+    if verbose:
+        import time
+        print("Computing keypoints on the two images...")
+        tstart = time.time()
+        num_keys1 = compute_asift_keypoints(ipixels1_zoom, data1.shape[1] , data1.shape[0] , num_of_tilts1, verb, keys1, siftparameters)
+        tint = time.time()
+        print "ASIFT took %.3fs image1: %i ctrl points" % (tint - tstart, num_keys1)
+        num_keys2 = compute_asift_keypoints(ipixels2_zoom, data2.shape[1], data2.shape[0], num_of_tilts2, verb, keys2, siftparameters)
+        tend = time.time()
+        print "ASIFT took %.3fs image2: %i ctrl points" % (tend - tint, num_keys2)
+        tend = time.time()
+        num_matchings = compute_asift_matches(num_of_tilts1, num_of_tilts2,
+                                              data1.shape[1] , data1.shape[0],
+                                               data2.shape[1], data2.shape[0],
+                                               verb, keys1, keys2, matchings, siftparameters)
+        tmatch = time.time()
+        print("Matching: %s point, took %.3fs " % (num_matchings, tmatch - tend))
+    else:
+        num_keys1 = compute_asift_keypoints(ipixels1_zoom, data1.shape[1] , data1.shape[0] , num_of_tilts1, verb, keys1, siftparameters)
+        num_keys2 = compute_asift_keypoints(ipixels2_zoom, data2.shape[1], data2.shape[0], num_of_tilts2, verb, keys2, siftparameters)
+        num_matchings = compute_asift_matches(num_of_tilts1, num_of_tilts2,
+                                              data1.shape[1] , data1.shape[0],
+                                               data2.shape[1], data2.shape[0],
+                                               verb, keys1, keys2, matchings, siftparameters)
+
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((num_matchings, 4), dtype="float32")
+    matchings.begin()
+    for i in range(matchings.size()):
+        out[i, 0] = matchings[i].first.y
+        out[i, 1] = matchings[i].first.x
+        out[i, 2] = matchings[i].second.y
+        out[i, 3] = matchings[i].second.x
+    return out

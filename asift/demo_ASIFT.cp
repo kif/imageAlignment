@@ -50,8 +50,7 @@ using namespace std;
 #include <omp.h>
 #endif
 
-#include "demo_lib_sift.h"
-#include "io_png/io_png.h"
+#include "../sift/demo_lib_sift.h"
 
 #include "library.h"
 #include "frot.h"

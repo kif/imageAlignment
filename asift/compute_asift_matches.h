@@ -39,10 +39,10 @@
 //			  http://www.ipol.im/pub/algo/my_affine_sift/
 /*---------------------------------------------------------------------------*/
 
-#include "library.h"
-#include "demo_lib_sift.h"
-#include "frot.h"
-#include "fproj.h"
+#include "../sift/library.h"
+#include "../sift/demo_lib_sift.h"
+#include "../sift/frot.h"
+#include "../sift/fproj.h"
 #include <vector>
 using namespace std;
 

@@ -39,18 +39,21 @@ from numpy.distutils.misc_util import get_numpy_include_dirs
 
 import subprocess, sys
 p = subprocess.Popen(["cython", "-a", "--cplus", "feature.pyx"], shell=False)
-if p.wait():
+out = p.wait()
+if out:
     print("Cython error")
-    sys.exit(0)
+    sys.exit(out)
 
 feature_ext = Extension(name="feature",
                     include_dirs=get_numpy_include_dirs(),
-                    sources=["feature.cpp"] + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp"),
+                    sources=["feature.cpp"] + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp"),
                     language="C++",
 #                    cmdclass={'build_ext': build_ext},
                     libraries=["stdc++"],
                     #pyrex_cplus=True
-                    )
+                    extra_compile_args=['-fopenmp'],
+                    extra_link_args=['-fopenmp'])
+
 
 setup(name='feature',
       version="0.0.1",
