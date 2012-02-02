@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 #
-#    Project: Azimuthal integration 
-#             https://forge.epn-campus.eu/projects/azimuthal
+#    Project: Image Alignment  
+#             
 #
 #    File: "$Id$"
 #
@@ -11,7 +11,7 @@
 #    Principal author:       Jérôme Kieffer (Jerome.Kieffer@ESRF.eu)
 #
 #    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
+#    it under the terms of the GNU Lesser General Public License as published by
 #    the Free Software Foundation, either version 3 of the License, or
 #    (at your option) any later version.
 #
@@ -20,20 +20,21 @@
 #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #    GNU General Public License for more details.
 #
-#    You should have received a copy of the GNU General Public License
+#    You should have received a copy of the GNU Lesser General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+__author__ = "Jerome Kieffer"
+__copyright__ = "2012, ESRF"
+__license__ = "LGPL"
 try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
 
-#from distutils.core import  Extension
 from Cython.Distutils import build_ext
 from Cython.Distutils.extension import Extension
 import glob
-# for numpy
 from numpy.distutils.misc_util import get_numpy_include_dirs
 
 
@@ -48,9 +49,7 @@ feature_ext = Extension(name="feature",
                     include_dirs=get_numpy_include_dirs(),
                     sources=["feature.cpp"] + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp"),
                     language="C++",
-#                    cmdclass={'build_ext': build_ext},
                     libraries=["stdc++"],
-                    #pyrex_cplus=True
                     extra_compile_args=['-fopenmp'],
                     extra_link_args=['-fopenmp'])
 
