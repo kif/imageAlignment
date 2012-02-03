@@ -27,31 +27,21 @@
 __author__ = "Jerome Kieffer"
 __copyright__ = "2012, ESRF"
 __license__ = "LGPL"
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
 
-from Cython.Distutils import build_ext
+from distutils.core import setup
 from Cython.Distutils.extension import Extension
+from Cython.Distutils import build_ext
 import glob
 from numpy.distutils.misc_util import get_numpy_include_dirs
 
-
-import subprocess, sys
-p = subprocess.Popen(["cython", "-a", "--cplus", "feature.pyx"], shell=False)
-out = p.wait()
-if out:
-    print("Cython error")
-    sys.exit(out)
-
 feature_ext = Extension(name="feature",
+                    sources=["feature.pyx"] + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp"),
                     include_dirs=get_numpy_include_dirs(),
-                    sources=["feature.cpp"] + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp"),
-                    language="C++",
-                    libraries=["stdc++"],
+                    language="c++",
+#                    libraries=["stdc++"],
                     extra_compile_args=['-fopenmp'],
-                    extra_link_args=['-fopenmp'])
+                    extra_link_args=['-fopenmp'],
+                    )
 
 
 setup(name='feature',
@@ -60,5 +50,5 @@ setup(name='feature',
       author_email="jerome.kieffer@esrf.eu",
       description='test for feature extraction algorithm like sift, surf, ...',
       ext_modules=[feature_ext],
-      cmdclass={'feature_ext': build_ext},
+      cmdclass={'build_ext': build_ext}
       )
