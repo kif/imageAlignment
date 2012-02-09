@@ -7,59 +7,46 @@ import matplotlib
 from pylab import *
 import time
 
+def Visual(im1, im2, ctrlPt):
+    s00, s01 = im1.shape
+    s10, s11 = im2.shape
+
+    bigimg = numpy.zeros((max(s00, s10) , s01 + s11))
+    bigimg[:s00, :s01] = im1
+    bigimg[:s10, s01:] = im2
+    imshow(bigimg)
+    arrow(s01, 0, 0, max(s00, s10), width=0)
+    for i in range(ctrlPt.shape[0]):
+        color = (cos(i) ** 2, cos(i + 1) ** 2, cos(i + 2) ** 2)
+        arrow(ctrlPt[i, 1], ctrlPt[i, 0], ctrlPt[i, 3] - ctrlPt[i, 1] + s01 , ctrlPt[i, 2] - ctrlPt[i, 0] , width=0, color=color)
+    show()
+
 
 def Visual_SURF(im1, im2):
-    s0, s1 = im1.shape
     t0 = time.time()
-    out = feature.surf2(im1, im2, 1)
+    out1 = feature.surf2(im1, im2, 1)
+    out = feature.reduce_orsa(out1)
     t1 = time.time()
-    print("Image alignement (shape: %sx%s) took %.3fs. SURF found %i control points" % (s0, s1, t1 - t0, out.shape[0]))
-
-    bigimg = numpy.zeros((s0 , s1 * 2))
-    bigimg[:, :s1] = im1
-    bigimg[:, s1:] = im2
-    imshow(bigimg)
-    arrow(s1, 0, 0, s0, width=0)
-    for i in range(out.shape[0]):
-        color = (cos(i) ** 2, cos(i + 1) ** 2, cos(i + 2) ** 2)
-        arrow(out[i, 1], out[i, 0], out[i, 3] - out[i, 1] + s1 , out[i, 2] - out[i, 0] , width=0, color=color)
-    show()
+    print("Image alignment (shapes: %s,%s) took %.3fs. SURF found %i control points; Reduced to %i with ORSA" % (im1.shape, im2.shape, t1 - t0, out1.shape[0], out.shape[0]))
+    Visual(im1, im2, out)
     return out
 
 def Visual_SIFT(im1, im2):
-    s0, s1 = im1.shape
     t0 = time.time()
-    out = feature.sift2(im1, im2, 1)
-
+    out1 = feature.sift2(im1, im2, 1)
+    out = feature.reduce_orsa(out1)
     t1 = time.time()
-    print("Image alignement (shape: %sx%s) took %.3fs. SIFT found %i control points" % (s0, s1, t1 - t0, out.shape[0]))
-    bigimg = numpy.zeros((s0 , s1 * 2))
-    bigimg[:, :s1] = im1
-    bigimg[:, s1:] = im2
-    imshow(bigimg)
-    arrow(s1, 0, 0, s0, width=0)
-    for i in range(out.shape[0]):
-        color = (cos(i) ** 2, cos(i + 1) ** 2, cos(i + 2) ** 2)
-        arrow(out[i, 1], out[i, 0], out[i, 3] - out[i, 1] + s1 , out[i, 2] - out[i, 0] , width=0, color=color)
-    show()
+    print("Image alignment (shapes: %s,%s) took %.3fs. SIFT found %i control points; Reduced to %i with ORSA" % (im1.shape, im2.shape, t1 - t0, out1.shape[0], out.shape[0]))
+    Visual(im1, im2, out)
     return out
 
 def Visual_ASIFT(im1, im2):
-    s0, s1 = im1.shape
     t0 = time.time()
-    out = feature.asift2(im1, im2, 1)
-
+    out1 = feature.asift2(im1, im2, 1)
+    out = feature.reduce_orsa(out1)
     t1 = time.time()
-    print("Image alignement (shape: %sx%s) took %.3fs. ASIFT found %i control points" % (s0, s1, t1 - t0, out.shape[0]))
-    bigimg = numpy.zeros((s0 , s1 * 2))
-    bigimg[:, :s1] = im1
-    bigimg[:, s1:] = im2
-    imshow(bigimg)
-    arrow(s1, 0, 0, s0, width=0)
-    for i in range(out.shape[0]):
-        color = (cos(i) ** 2, cos(i + 1) ** 2, cos(i + 2) ** 2)
-        arrow(out[i, 1], out[i, 0], out[i, 3] - out[i, 1] + s1 , out[i, 2] - out[i, 0] , width=0, color=color)
-    show()
+    print("Image alignment (shapes: %s,%s) took %.3fs. ASIFT found %i control points; Reduced to %i with ORSA" % (im1.shape, im2.shape, t1 - t0, out1.shape[0], out.shape[0]))
+    Visual(im1, im2, out)
     return out
 
 def calcShift(npa, mask=None):
@@ -86,22 +73,36 @@ if __name__ == "__main__":
     lena1 = scipy.lena()
     lena2 = numpy.zeros_like(lena1)
     lena2[5:, 3:] = lena1[:-ao1, :-ao2]
-#    Visual_SURF(lena1, lena2)
-    out = feature.surf2(lena1, lena2, verbose=1)
-    import scipy
+    out = Visual_SURF(lena1, lena2)
+#    out = feature.surf2(lena1, lena2, verbose=1)
     print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
     print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
-    print "clacShift", calcShift(out)
+    raw_input("Enter to continue")
+#    out2 = feature.reduce_orsa(out)
+#    print "SURF: %s keypoint; ORSA -> %s" % (out.shape[0], out2.shape[0])
+#    out = out2
+#    print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
+#    print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
 
     print "*" * 80
-    out = feature.sift2(lena1, lena2, verbose=1)
-#    out = Visual_SIFT(lena1, lena2)
+    #out = feature.sift2(lena1, lena2, verbose=1)
+    out = Visual_SIFT(lena1, lena2)
     print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
     print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
-    print "clacShift", calcShift(out)
+    raw_input("Enter to continue")
+#    print "clacShift", calcShift(out)
+#    out2 = feature.reduce_orsa(out)
+#    print "SIFT: %s keypoint; ORSA -> %s" % (out.shape[0], out2.shape[0])
+#    out = out2
+#    print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
+#    print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
+#    print "clacShift", calcShift(out)
+
 
     print "*" * 80
-    out = feature.asift2(lena1, lena2, verbose=0)
+#    out = feature.asift2(lena1, lena2, verbose=0)
+    out = Visual_ASIFT(lena1, lena2)
     print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
     print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
-    print "clacShift", calcShift(out)
+    raw_input("Enter to continue")
+#    print "clacShift", calcShift(out)

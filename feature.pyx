@@ -1,7 +1,7 @@
 # -*- coding: utf8 -*-
 #
-#    Project: Azimuthal integration 
-#             https://forge.epn-campus.eu/projects/azimuthal
+#    Project: Image Alignment 
+#             
 #
 #    File: "$Id$"
 #
@@ -44,7 +44,6 @@ cdef extern from "surf/image.h":
         int width, height
         float * img
 
-
 cdef extern from "surf/keypoint.h":
     cdef cppclass keyPoint:
 #        keyPoint() #
@@ -52,7 +51,7 @@ cdef extern from "surf/keypoint.h":
         float    x, y, scale, orientation
         bool     signLaplacian
 #    typedef  std::vector < keyPoint *> listKeyPoints
-    ctypedef vector[ keyPoint * ] listKeyPoints  #iter is declared as being of type vector<int>::iterator
+    ctypedef vector[ keyPoint *] listKeyPoints  
 
 cdef extern from "surf/descriptor.h":
     cdef cppclass descriptor:
@@ -108,18 +107,26 @@ cdef extern from "sift/demo_lib_sift.h":
         float MatchYradius
         int noncorrectlylocalized
     void default_sift_parameters(siftPar par)
-    void compute_sift_keypoints(float * input, keypointslist  keypoints, int width, int height, siftPar par)
+    void compute_sift_keypoints(float * input, keypointslist  keypoints, int width, int height, siftPar par) nogil
     #typedef std::pair<keypoint,keypoint> matching;
     ctypedef  pair[ keypoint  , keypoint  ] matching
     #typedef std::vector<matching> matchingslist;
     ctypedef  vector[ matching ] matchingslist
-    void compute_sift_matches(keypointslist keys1, keypointslist keys2, matchingslist matchings, siftPar par)
+    void compute_sift_matches(keypointslist keys1, keypointslist keys2, matchingslist matchings, siftPar par) nogil
 
 
 cdef extern from "asift/compute_asift_keypoints.h":
     int compute_asift_keypoints(vector[float] image, int width, int height, int num_of_tilts, int verb, vector[ vector[ keypointslist ]] & keys_all, siftPar siftparameters) nogil
 cdef extern from "asift/compute_asift_matches.h":
     int compute_asift_matches(int num_of_tilts1, int num_of_tilts2, int w1, int h1, int w2, int h2, int verb, vector[vector[keypointslist]] keys1, vector[vector[keypointslist]] keys2, matchingslist matchings, siftPar siftparameters) nogil
+
+cdef extern from "libMatch/match.h":
+    struct Match:
+        float x1, y1, x2, y2
+
+cdef extern from "orsa/orsa.h":
+    float orsa(int width, int height, vector[Match] match, vector[float] index, int t_value, int verb_value, int n_flag_value, int mode_value, int stop_value)nogil
+
 
 
 def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
@@ -144,7 +151,6 @@ def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
     cdef image * img2 = new image(data2.shape[1], data2.shape[0])
     img2.img = < float *> data2.data
 
-
     if verbose:
         import time
         time_init = time.time()
@@ -165,9 +171,9 @@ def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
             listeDesc2 = getKeyPoints(img2, octave, interval, l2, verbose)
             matching = matchDescriptor(listeDesc1, listeDesc2)
 
-
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matching.size(), 4), dtype="float32")
     get_points(matching, < float *> (out.data))
+    del matching, l1, l2, listeDesc1, listeDesc2
     return out
 
 
@@ -183,10 +189,6 @@ def sift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
     cdef int i
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] data1 = numpy.ascontiguousarray(255. * (in1.astype("float32") - in1.min()) / (in1.max() - in1.min()))
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] data2 = numpy.ascontiguousarray(255. * (in2.astype("float32") - in2.min()) / (in2.max() - in2.min()))
-    cdef image * img1 = new image(data1.shape[1], data1.shape[0])
-    img1.img = < float *> data1.data
-    cdef image * img2 = new image(data2.shape[1], data2.shape[0])
-    img2.img = < float *> data2.data
     cdef keypointslist k1, k2
     cdef siftPar para
     cdef matchingslist matchings
@@ -205,39 +207,20 @@ def sift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
         compute_sift_matches(k1, k2, matchings, para);
         print("Matching: %s point, took %.3fs " % (matchings.size(), time.time() - t2))
     else:
-        compute_sift_keypoints(< float *> data1.data, k1, data1.shape[1], data1.shape[0], para);
-        compute_sift_keypoints(< float *> data2.data, k2, data2.shape[1], data2.shape[0], para);
-        compute_sift_matches(k1, k2, matchings, para);
-
-#    if matchings.size > 10:
-#        
-#    else:
+        with nogil:
+            compute_sift_keypoints(< float *> data1.data, k1, data1.shape[1], data1.shape[0], para);
+            compute_sift_keypoints(< float *> data2.data, k2, data2.shape[1], data2.shape[0], para);
+            compute_sift_matches(k1, k2, matchings, para);
+              
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype="float32")
     for i in range(matchings.size()):
         out[i, 0] = matchings[i].first.y
         out[i, 1] = matchings[i].first.x
         out[i, 2] = matchings[i].second.y
         out[i, 3] = matchings[i].second.x
+#    del matchings, k1, k2, para
     return out
-#TODO:
-#        if(matchings.size() > 10)
-#        {
-#            std::vector < float > index;
-#            // Guoshen Yu, 2010.09.23
-#            // index.clear();
-#
-#            int t_value_orsa = 10000;
-#            int verb_value_orsa = 0;
-#            int n_flag_value_orsa = 0;
-#            int mode_value_orsa = 2;
-#            int stop_value_orsa = 0;
-#
-#            // epipolar filtering with the Moisan - Stival ORSA algorithm.
-#            // float nfa = orsa(w1, h1, match_coor, index, t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa);
-#
-#            float nfa = orsa((img3 -> w() + img4 -> w()) / 2, (img3 -> h() + img4 -> h()) / 2, match2_coor, index, t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa);
-#            cout << "ORSA(SIFT) said that : " << index.size() << " good matchs. nfa = " << nfa << endl;
-
+    
 
 def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
     """
@@ -306,3 +289,47 @@ def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=
         out[i, 2] = matchings[i].second.y
         out[i, 3] = matchings[i].second.x
     return out
+
+
+def reduce_orsa(numpy.ndarray inp not None, bool verbose=False):
+    """
+    Call ORSA (keypoint checking) 
+    @param inp: n*4 ot n*2*2 array representing keypoints. 
+    @type in1: numpy ndarray
+    @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
+    """
+    cdef int i, num_matchings, insize,p
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] data = numpy.ascontiguousarray(inp.reshape(-1,4))
+    insize = data.shape[0]
+    cdef vector [ Match ]  match_coor = vector [ Match ](< size_t > insize)
+    cdef int t_value_orsa = 10000
+    cdef int verb_value_orsa = verbose
+    cdef int n_flag_value_orsa = 0
+    cdef int mode_value_orsa = 2
+    cdef int stop_value_orsa = 0
+    cdef float nfa
+    cdef int width = int(1+max(data[:,1].max(),data[:,3].max()))
+    cdef int heigh = int(1+max(data[:,0].max(),data[:,2].max()))
+    cdef vector [ float ] index = vector [ float ](< size_t > data.shape[0])
+    tmatch=time.time()
+    with nogil: 
+        for i in range(data.shape[0]):
+            match_coor[i].y1 = < float > data[i,0]
+            match_coor[i].x1 = < float > data[i,1]
+            match_coor[i].y2 = < float > data[i,2]
+            match_coor[i].x2 = < float > data[i,3]
+    # epipolar filtering with the Moisan - Stival ORSA algorithm.
+        nfa = orsa(width, heigh, match_coor, index, t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa)
+    tend = time.time()
+    num_matchings = index.size()
+    if verbose:
+        print("Matching with ORSA: %s => %s, took %.3fs, nfs=%s" % (insize, num_matchings, tend-tmatch,nfa))
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((num_matchings, 4), dtype="float32")
+    for i in range(index.size()):
+        p=<int>index[i]
+        out[i,0] = data[p,0]
+        out[i,1] = data[p,1]
+        out[i,2] = data[p,2]
+        out[i,3] = data[p,3]
+    return out
+
