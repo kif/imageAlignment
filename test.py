@@ -25,27 +25,42 @@ def Visual(im1, im2, ctrlPt):
 def Visual_SURF(im1, im2):
     t0 = time.time()
     out1 = feature.surf2(im1, im2, 1)
-    out = feature.reduce_orsa(out1)
-    t1 = time.time()
-    print("Image alignment (shapes: %s,%s) took %.3fs. SURF found %i control points; Reduced to %i with ORSA" % (im1.shape, im2.shape, t1 - t0, out1.shape[0], out.shape[0]))
+    if out1.shape[0] < 15:
+        out = out1
+        print("Image alignment (shapes: %s,%s) took %.3fs. SURF found %i control points" %
+              (im1.shape, im2.shape, time.time() - t0, out1.shape[0],))
+    else:
+        out = feature.reduce_orsa(out1)
+        print("Image alignment (shapes: %s,%s) took %.3fs. SURF found %i control points; Reduced to %i with ORSA" %
+               (im1.shape, im2.shape, time.time() - t0, out1.shape[0], out.shape[0]))
     Visual(im1, im2, out)
     return out
 
 def Visual_SIFT(im1, im2):
     t0 = time.time()
     out1 = feature.sift2(im1, im2, 1)
-    out = feature.reduce_orsa(out1)
-    t1 = time.time()
-    print("Image alignment (shapes: %s,%s) took %.3fs. SIFT found %i control points; Reduced to %i with ORSA" % (im1.shape, im2.shape, t1 - t0, out1.shape[0], out.shape[0]))
+    if out1.shape[0] < 15:
+        out = out1
+        print("Image alignment (shapes: %s,%s) took %.3fs. SIFT found %i control points" %
+              (im1.shape, im2.shape, time.time() - t0, out1.shape[0],))
+    else:
+        out = feature.reduce_orsa(out1)
+        print("Image alignment (shapes: %s,%s) took %.3fs. SIFT found %i control points; Reduced to %i with ORSA" %
+               (im1.shape, im2.shape, time.time() - t0, out1.shape[0], out.shape[0]))
     Visual(im1, im2, out)
     return out
 
 def Visual_ASIFT(im1, im2):
     t0 = time.time()
     out1 = feature.asift2(im1, im2, 1)
-    out = feature.reduce_orsa(out1)
-    t1 = time.time()
-    print("Image alignment (shapes: %s,%s) took %.3fs. ASIFT found %i control points; Reduced to %i with ORSA" % (im1.shape, im2.shape, t1 - t0, out1.shape[0], out.shape[0]))
+    if out1.shape[0] < 15:
+        out = out1
+        print("Image alignment (shapes: %s,%s) took %.3fs. ASIFT found %i control points" %
+              (im1.shape, im2.shape, time.time() - t0, out1.shape[0],))
+    else:
+        out = feature.reduce_orsa(out1)
+        print("Image alignment (shapes: %s,%s) took %.3fs. ASIFT found %i control points; Reduced to %i with ORSA" %
+               (im1.shape, im2.shape, time.time() - t0, out1.shape[0], out.shape[0]))
     Visual(im1, im2, out)
     return out
 
@@ -98,11 +113,11 @@ if __name__ == "__main__":
 #    print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
 #    print "clacShift", calcShift(out)
 
-
-    print "*" * 80
-#    out = feature.asift2(lena1, lena2, verbose=0)
-    out = Visual_ASIFT(lena1, lena2)
-    print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
-    print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
-    raw_input("Enter to continue")
+    sift(lena1, lena2, verbose=1)
+#    print "*" * 80
+##    out = feature.asift2(lena1, lena2, verbose=0)
+#    out = Visual_ASIFT(lena1, lena2)
+#    print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
+#    print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
+#    raw_input("Enter to continue")
 #    print "clacShift", calcShift(out)

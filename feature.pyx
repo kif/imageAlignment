@@ -115,6 +115,7 @@ cdef extern from "sift/demo_lib_sift.h":
     void compute_sift_matches(keypointslist keys1, keypointslist keys2, matchingslist matchings, siftPar par) nogil
 
 
+
 cdef extern from "asift/compute_asift_keypoints.h":
     int compute_asift_keypoints(vector[float] image, int width, int height, int num_of_tilts, int verb, vector[ vector[ keypointslist ]] & keys_all, siftPar siftparameters) nogil
 cdef extern from "asift/compute_asift_matches.h":
@@ -128,6 +129,8 @@ cdef extern from "orsa/orsa.h":
     float orsa(int width, int height, vector[Match] match, vector[float] index, int t_value, int verb_value, int n_flag_value, int mode_value, int stop_value)nogil
 
 
+ctypedef float* Img
+ctypedef  vector[ Img ] lstImg
 
 def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
     """
@@ -220,8 +223,53 @@ def sift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
         out[i, 3] = matchings[i].second.x
 #    del matchings, k1, k2, para
     return out
-    
+'''
+def sift(*listArg, bool verbose=False):
+    """
+    Call SIFT on a pair of images
+    @param *listArg: images 
+    @type *listArg: numpy ndarray
+    @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
+    """
+    cdef int i,n
+    n=0
+    for obj in listArg:
+        if isinstance(obj,numpy.ndarray):
+            n+=1
+    cdef lstImg lstInput =  vector[Img](< size_t >n)
+    cdef vector [ keypointslist] lstKeypointslist = vector [ keypointslist ](< size_t > n)
+    cdef vector [ int] lstWidth = vector [ int ](< size_t > n)
+    cdef vector [ int] lstHeight = vector [ int ](< size_t > n)
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] tmpNPA
+    i=0
+    print n
+    for obj in listArg:
+        if isinstance(obj,numpy.ndarray):
+            tmpNPA=numpy.ascontiguousarray(255. * (obj.astype("float32") - obj.min()) / (obj.max() - obj.min()))
+            lstInput[i]  =  <Img> tmpNPA.data
+            lstWidth[i]  = obj.shape[1]
+            lstHeight[i] = obj.shape[0]
+            i+=1
+    cdef siftPar para
+    cdef matchingslist matchings
+    default_sift_parameters(para)
+    with nogil:
+        for i in range(n):
+            compute_sift_keypoints(< float *> lstInput[i].data, lstKeypointslist[i], lstWidth[i], lstHeight[i], para);
+#        compute_sift_keypoints(< float *> data2.data, k2, data2.shape[1], data2.shape[0], para);
+#        compute_sift_matches(k1, k2, matchings, para);
+#              
+#    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype="float32")
+#    for i in range(matchings.size()):
+#        out[i, 0] = matchings[i].first.y
+#        out[i, 1] = matchings[i].first.x
+#        out[i, 2] = matchings[i].second.y
+#        out[i, 3] = matchings[i].second.x
+    del lstInput,lstKeypointslist,lstWidth,lstHeight
+#    return out
 
+#    
+'''
 def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
     """
     Call ASIFT on a pair of images
@@ -291,25 +339,37 @@ def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=
     return out
 
 
-def reduce_orsa(numpy.ndarray inp not None, bool verbose=False):
+def reduce_orsa(numpy.ndarray inp not None, shape=None,bool verbose=False):
     """
     Call ORSA (keypoint checking) 
     @param inp: n*4 ot n*2*2 array representing keypoints. 
     @type in1: numpy ndarray
+    @param shape: shape of the input images (unless guessed)
+    @type shape: 2-tuple of integers
     @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
     """
+    
     cdef int i, num_matchings, insize,p
-    cdef numpy.ndarray[numpy.float32_t, ndim = 2] data = numpy.ascontiguousarray(inp.reshape(-1,4))
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] data = numpy.ascontiguousarray(inp.astype("float32").reshape(-1,4))
     insize = data.shape[0]
+    if insize<10:
+        return data
     cdef vector [ Match ]  match_coor = vector [ Match ](< size_t > insize)
     cdef int t_value_orsa = 10000
     cdef int verb_value_orsa = verbose
     cdef int n_flag_value_orsa = 0
     cdef int mode_value_orsa = 2
     cdef int stop_value_orsa = 0
-    cdef float nfa
-    cdef int width = int(1+max(data[:,1].max(),data[:,3].max()))
-    cdef int heigh = int(1+max(data[:,0].max(),data[:,2].max()))
+    cdef float nfa   
+    cdef int width,heigh
+    if shape is None:
+        width = int(1+max(data[:,1].max(),data[:,3].max()))
+        heigh = int(1+max(data[:,0].max(),data[:,2].max()))
+    elif hasattr(shape,"__len__") and len(shape)>=2:
+        width = int(shape[1])
+        heigh = int(shape[0])
+    else:
+        width = heigh = int(shape)
     cdef vector [ float ] index = vector [ float ](< size_t > data.shape[0])
     tmatch=time.time()
     with nogil: 
