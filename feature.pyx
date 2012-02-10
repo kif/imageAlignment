@@ -31,6 +31,7 @@ __contact__ = "jerome.kieffer@esrf.fr"
 __doc__ = "this is a cython wrapper for feature extraction algorithm"
 
 import cython, time
+from cython.parallel cimport prange
 cimport numpy
 import numpy
 from libcpp cimport bool
@@ -128,10 +129,9 @@ cdef extern from "libMatch/match.h":
 cdef extern from "orsa/orsa.h":
     float orsa(int width, int height, vector[Match] match, vector[float] index, int t_value, int verb_value, int n_flag_value, int mode_value, int stop_value)nogil
 
-
-ctypedef float* Img
-ctypedef  vector[ Img ] lstImg
-
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
     """
     Call surf on a pair of images
@@ -179,7 +179,9 @@ def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
     del matching, l1, l2, listeDesc1, listeDesc2
     return out
 
-
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def sift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
     """
     Call SIFT on a pair of images
@@ -223,7 +225,39 @@ def sift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
         out[i, 3] = matchings[i].second.x
 #    del matchings, k1, k2, para
     return out
-'''
+
+def pos(int n, int k):
+    """get postion i,j from index k in an upper-filled square array 
+    [ 0 0 1 2 3 ]
+    [ 0 0 4 5 6 ]
+    [ 0 0 0 7 8 ]
+    [ 0 0 0 0 9 ]
+    [ 0 0 0 0 0 ]
+
+    pos(5,9): (3, 4)
+    pos(5,8): (2, 4)
+    pos(5,7): (2, 3)
+    pos(5,6): (1, 4)
+    pos(5,5): (1, 3)
+    pos(5,4): (1, 2)
+    pos(5,3): (0, 4)
+    pos(5,2): (0, 3)
+    pos(5,1): (0, 2)
+    pos(5,0): (0, 1)
+
+    """
+    cdef int i,j
+    for i in range(n):
+        if k<(n-i-1):
+            j=i+1+k 
+            break
+        else:
+            k=k-(n-i-1)
+    return i,j
+
+#@cython.cdivision(True)
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
 def sift(*listArg, bool verbose=False):
     """
     Call SIFT on a pair of images
@@ -231,45 +265,99 @@ def sift(*listArg, bool verbose=False):
     @type *listArg: numpy ndarray
     @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
     """
-    cdef int i,n
-    n=0
-    for obj in listArg:
-        if isinstance(obj,numpy.ndarray):
-            n+=1
-    cdef lstImg lstInput =  vector[Img](< size_t >n)
-    cdef vector [ keypointslist] lstKeypointslist = vector [ keypointslist ](< size_t > n)
-    cdef vector [ int] lstWidth = vector [ int ](< size_t > n)
-    cdef vector [ int] lstHeight = vector [ int ](< size_t > n)
+    cdef int i,j,k,n,m,p,t
+    cdef vector[float*] lstInput  
+    cdef vector [keypointslist] lstKeypointslist
+    cdef vector [matchingslist] lstMatchings
+    cdef vector [vector[float]] lstIndex
+    cdef vector[vector [ Match ]] lstMatchlist
+    cdef Match tmpMatch
+    cdef vector [int] lstWidth
+    cdef vector [int] lstHeight
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] tmpNPA
-    i=0
-    print n
+    cdef siftPar para
+    cdef matchingslist matchings
+    cdef int t_value_orsa = 10000
+    cdef int verb_value_orsa = verbose
+    cdef int n_flag_value_orsa = 0
+    cdef int mode_value_orsa = 2
+    cdef int stop_value_orsa = 0
+    cdef float nfa   
+    cdef vector[float] tmpIdx 
+    print len(listArg)
     for obj in listArg:
         if isinstance(obj,numpy.ndarray):
             tmpNPA=numpy.ascontiguousarray(255. * (obj.astype("float32") - obj.min()) / (obj.max() - obj.min()))
-            lstInput[i]  =  <Img> tmpNPA.data
-            lstWidth[i]  = obj.shape[1]
-            lstHeight[i] = obj.shape[0]
-            i+=1
-    cdef siftPar para
-    cdef matchingslist matchings
+            lstInput.push_back(<float*> tmpNPA.data)
+            lstWidth.push_back(obj.shape[1])
+            lstHeight.push_back(obj.shape[0])
+            lstKeypointslist.push_back(keypointslist())
+    n=lstInput.size()
+    m=n*(n-1)/2
+    print n,m
+    for k in range(m):
+        lstMatchings.push_back(matchingslist())
+        tmpIdx = vector[float]()
+        tmpIdx.push_back(-1)
+        lstIndex.push_back(tmpIdx)
+        lstMatchlist.push_back(vector [ Match ]())
     default_sift_parameters(para)
+    t=time.time()
     with nogil:
         for i in range(n):
-            compute_sift_keypoints(< float *> lstInput[i].data, lstKeypointslist[i], lstWidth[i], lstHeight[i], para);
-#        compute_sift_keypoints(< float *> data2.data, k2, data2.shape[1], data2.shape[0], para);
-#        compute_sift_matches(k1, k2, matchings, para);
-#              
-#    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype="float32")
-#    for i in range(matchings.size()):
-#        out[i, 0] = matchings[i].first.y
-#        out[i, 1] = matchings[i].first.x
-#        out[i, 2] = matchings[i].second.y
-#        out[i, 3] = matchings[i].second.x
-    del lstInput,lstKeypointslist,lstWidth,lstHeight
-#    return out
+            compute_sift_keypoints(lstInput[i], lstKeypointslist[i], lstWidth[i], lstHeight[i], para);
+    for i in range(n):
+        print i,lstKeypointslist[i].size(),lstWidth[i], lstHeight[i]
+#    with nogil:
+    for k in range(m):
+            #Calculate indexes
+            #i,j = pos(n,k)
+            t=k
+            for i in range(n):
+                if t<(n-i-1):
+                    j=i+1+t 
+                    break
+                else:
+                    t=t-(n-i-1)
+            print i,j,k,t
+            compute_sift_matches(lstKeypointslist[i], lstKeypointslist[j], lstMatchings[k], para)
+            if lstMatchings[k].size()> (<int>20):
+                for p in range(<int> lstMatchings[k].size()):
+                    tmpMatch.x1 = lstMatchings[k][p].first.x
+                    tmpMatch.y1 = lstMatchings[k][p].first.y
+                    tmpMatch.x2 = lstMatchings[k][p].second.x
+                    tmpMatch.y2 = lstMatchings[k][p].second.y
+                    lstMatchlist[k].push_back(tmpMatch)
+                nfa = orsa((lstWidth[i]+lstWidth[j])/2, (lstHeight[i]+lstHeight[j])/2,
+                            lstMatchlist[k], lstIndex[k],
+                            t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa)
+    out = {}
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] outArray
+    for k in range(m):
+        print k,pos(n,k),lstMatchings[k].size(),lstIndex[k].size(),lstMatchlist[k].size()
+        if lstMatchings[k].size()> (<int>20):
+            outArray = numpy.zeros((lstMatchlist[k].size(), 4), dtype="float32")
+            for p in range(lstIndex[k].size()):
+                i=<int>lstIndex[k][p]
+                outArray[p,0] = lstMatchings[k][i].first.y
+                outArray[p,1] = lstMatchings[k][i].first.x
+                outArray[p,2] = lstMatchings[k][i].second.y
+                outArray[p,3] = lstMatchings[k][i].second.x
+        else:
+            outArray = numpy.zeros((lstMatchings[k].size(), 4), dtype="float32")
+            for p in range(lstMatchings[k].size()):
+                outArray[p,0] = lstMatchings[k][p].first.y
+                outArray[p,1] = lstMatchings[k][p].first.x
+                outArray[p,2] = lstMatchings[k][p].second.y
+                outArray[p,3] = lstMatchings[k][p].second.x
+        out[pos(n,k)] = outArray
+    #del lstInput,lstKeypointslist,lstWidth,lstHeight
+    return out
 
 #    
-'''
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=False):
     """
     Call ASIFT on a pair of images
@@ -338,7 +426,9 @@ def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=
         out[i, 3] = matchings[i].second.x
     return out
 
-
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def reduce_orsa(numpy.ndarray inp not None, shape=None,bool verbose=False):
     """
     Call ORSA (keypoint checking) 

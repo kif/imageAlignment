@@ -410,7 +410,7 @@ float orsa(int width, int height, std::vector<Match>& match, std::vector<float>&
   
   /* check sizes */
   if (p1.size() != p2.size() || p1.size() < 14) {
-    fprintf(stderr,"Inconsistent sizes: p1=%d p2=%s\n",p1.size(),p2.size());
+    fprintf(stderr,"Inconsistent sizes: p1=%d p2=%d\n",int(p1.size()),int(p2.size()));
     return 1;
 /*    exit(EXIT_FAILURE);  indicate failure.*/
   } 
