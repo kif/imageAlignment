@@ -285,7 +285,7 @@ int noncorrectlylocalized;
 void default_sift_parameters(siftPar &par);
 
 void compute_sift_keypoints(float *input,  keypointslist& keypoints,int width, int height, siftPar &par);
-
+void compute_sift_keypoints_flimage(flimage image, keypointslist& keypoints, siftPar &par);
 
 
 

@@ -136,36 +136,17 @@ void PlaceInIndex(
 
 
 
+
 void compute_sift_keypoints(float *input, keypointslist& keypoints, int width, int height, siftPar &par)
 {
 
 	flimage image;
+	image.create(width,height,input);
+	compute_sift_keypoints_flimage(image, keypoints,par);
+}
 
-	/// Make zoom of image if necessary
+void compute_sift_keypoints_flimage(flimage image, keypointslist& keypoints, siftPar &par){
 	float octSize = 1.0;
-	if (par.DoubleImSize){
-
-		//printf("... compute_sift_keypoints :: applying zoom\n");
-//		image.create(2*width, 2*height);
-//		apply_zoom(input,image.getPlane(),2.0,par.order,width,height);
-//		octSize *= 0.5;
-		
-		printf("Doulbe image size not allowed. Guoshen Yu\n");
-		exit(-1);
-		
-
-		
-	} else
-	{
-
-		image.create(width,height,input);
-	}
-
-// 	 printf("Using initial Dog value: %f\n", par.PeakThresh);
-//    	 printf("Double image size: %d\n", par.DoubleImSize);
-//    	 printf("Interpolation order: %d\n", par.order);
-
-
 	/// Apply initial smoothing to input image to raise its smoothing to par.InitSigma.  
 	/// We assume image from camera has smoothing of sigma = 0.5, which becomes sigma = 1.0 if image has been doubled. 
 	/// increase = sqrt(Init^2 - Current^2)

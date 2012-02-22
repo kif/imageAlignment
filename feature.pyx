@@ -77,6 +77,15 @@ cdef extern from "surf/lib.h":
 cdef extern from "surf/surf_match.h":
     void get_points(listMatch * , float *)nogil
 
+cdef extern from "sift/flimage.h":
+    cdef cppclass flimage:
+        flimage()
+        flimage(int w, int h)
+        flimage(int w, int h, float v)
+        flimage(int w, int h, float* v)    
+        int nwidth() nogil
+        int nheight() nogil
+
 cdef extern from "sift/demo_lib_sift.h":
     struct keypoint:
         float   x
@@ -109,6 +118,8 @@ cdef extern from "sift/demo_lib_sift.h":
         int noncorrectlylocalized
     void default_sift_parameters(siftPar par)
     void compute_sift_keypoints(float * input, keypointslist  keypoints, int width, int height, siftPar par) nogil
+    void compute_sift_keypoints_flimage(flimage img,keypointslist  keypoints, siftPar par) nogil
+
     #typedef std::pair<keypoint,keypoint> matching;
     ctypedef  pair[ keypoint  , keypoint  ] matching
     #typedef std::vector<matching> matchingslist;
@@ -128,6 +139,8 @@ cdef extern from "libMatch/match.h":
 
 cdef extern from "orsa/orsa.h":
     float orsa(int width, int height, vector[Match] match, vector[float] index, int t_value, int verb_value, int n_flag_value, int mode_value, int stop_value)nogil
+
+ctypedef  vector[ Match ] Matchlist
 
 @cython.cdivision(True)
 @cython.boundscheck(False)
@@ -255,9 +268,9 @@ def pos(int n, int k):
             k=k-(n-i-1)
     return i,j
 
-#@cython.cdivision(True)
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def sift(*listArg, bool verbose=False):
     """
     Call SIFT on a pair of images
@@ -266,52 +279,48 @@ def sift(*listArg, bool verbose=False):
     @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
     """
     cdef int i,j,k,n,m,p,t
-    cdef vector[float*] lstInput  
+    cdef keypointslist tmpKp
+    cdef matchingslist tmpMp
+    cdef flimage tmpImg
+    cdef vector[flimage] lstInput
     cdef vector [keypointslist] lstKeypointslist
-    cdef vector [matchingslist] lstMatchings
+    cdef vector[matchingslist] lstMatchinglist
+    cdef vector[Matchlist] lstMatchlist
+    cdef vector[float] tmpIdx 
     cdef vector [vector[float]] lstIndex
-    cdef vector[vector [ Match ]] lstMatchlist
-    cdef Match tmpMatch
-    cdef vector [int] lstWidth
-    cdef vector [int] lstHeight
-    cdef numpy.ndarray[numpy.float32_t, ndim = 2] tmpNPA
+    cdef numpy.ndarray[numpy.float32_t, ndim = 1] tmpNPA
     cdef siftPar para
-    cdef matchingslist matchings
     cdef int t_value_orsa = 10000
     cdef int verb_value_orsa = verbose
     cdef int n_flag_value_orsa = 0
     cdef int mode_value_orsa = 2
     cdef int stop_value_orsa = 0
-    cdef float nfa   
-    cdef vector[float] tmpIdx 
-    print len(listArg)
+    cdef float nfa
+    cdef Matchlist tmpMatchlist
+    cdef Match tmpMatch   
+    
+    default_sift_parameters(para)
     for obj in listArg:
         if isinstance(obj,numpy.ndarray):
-            tmpNPA=numpy.ascontiguousarray(255. * (obj.astype("float32") - obj.min()) / (obj.max() - obj.min()))
-            lstInput.push_back(<float*> tmpNPA.data)
-            lstWidth.push_back(obj.shape[1])
-            lstHeight.push_back(obj.shape[0])
+            tmpNPA=numpy.ascontiguousarray((255. * (obj.astype("float32") - obj.min()) / <float> (obj.max() - obj.min())).flatten())
+            lstInput.push_back(flimage(<int>obj.shape[1],<int>obj.shape[0],<float*> tmpNPA.data))
             lstKeypointslist.push_back(keypointslist())
     n=lstInput.size()
     m=n*(n-1)/2
-    print n,m
     for k in range(m):
-        lstMatchings.push_back(matchingslist())
-        tmpIdx = vector[float]()
-        tmpIdx.push_back(-1)
+        lstMatchinglist.push_back(matchingslist())
+        lstMatchlist.push_back(tmpMatchlist)
         lstIndex.push_back(tmpIdx)
-        lstMatchlist.push_back(vector [ Match ]())
-    default_sift_parameters(para)
+    
     t=time.time()
     with nogil:
-        for i in range(n):
-            compute_sift_keypoints(lstInput[i], lstKeypointslist[i], lstWidth[i], lstHeight[i], para);
-    for i in range(n):
-        print i,lstKeypointslist[i].size(),lstWidth[i], lstHeight[i]
-#    with nogil:
-    for k in range(m):
+        for i in prange(n):
+            compute_sift_keypoints_flimage(lstInput[i], lstKeypointslist[i], para)
+    t1=time.time()
+    print("Parallel SIFT took %.3fs for %i images"%((t1-t),n))
+    with nogil:
+        for k in prange(m):
             #Calculate indexes
-            #i,j = pos(n,k)
             t=k
             for i in range(n):
                 if t<(n-i-1):
@@ -319,39 +328,52 @@ def sift(*listArg, bool verbose=False):
                     break
                 else:
                     t=t-(n-i-1)
-            print i,j,k,t
-            compute_sift_matches(lstKeypointslist[i], lstKeypointslist[j], lstMatchings[k], para)
-            if lstMatchings[k].size()> (<int>20):
-                for p in range(<int> lstMatchings[k].size()):
-                    tmpMatch.x1 = lstMatchings[k][p].first.x
-                    tmpMatch.y1 = lstMatchings[k][p].first.y
-                    tmpMatch.x2 = lstMatchings[k][p].second.x
-                    tmpMatch.y2 = lstMatchings[k][p].second.y
-                    lstMatchlist[k].push_back(tmpMatch)
-                nfa = orsa((lstWidth[i]+lstWidth[j])/2, (lstHeight[i]+lstHeight[j])/2,
-                            lstMatchlist[k], lstIndex[k],
-                            t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa)
+            #i,j = pos(n,k)
+            compute_sift_matches(lstKeypointslist[i], lstKeypointslist[j], lstMatchinglist[k], para)
+    t2=time.time()
+    print("Parallel Matching took %.3fs for %i pairs of images"%((t2-t1),m))
+    #with nogil:
+    for k in range(m):
+            for p in range(<int> lstMatchinglist[k].size()):
+                tmpMatch = Match(x1=lstMatchinglist[k][p].first.x,
+                                 y1=lstMatchinglist[k][p].first.y,
+                                 x2=lstMatchinglist[k][p].second.x,
+                                 y2=lstMatchinglist[k][p].second.y)
+                lstMatchlist[k].push_back(tmpMatch)
+    t3=time.time()
+    print("Serial copy took %.3fs for %i pairs of images"%((t3-t2),m))
+    with nogil:
+        for k in prange(m):
+            if (<int> lstMatchinglist[k].size()) >(<int>20):
+                nfa = orsa((lstInput[i].nwidth()+lstInput[j].nwidth())/2, (lstInput[i].nheight()+lstInput[j].nheight())/2,
+                                lstMatchlist[k], lstIndex[k],
+                                t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa)
+    t4=time.time()
+    print("Parallel ORSA took %.3fs for %i pairs of images"%((t4-t3),m))
     out = {}
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] outArray
     for k in range(m):
-        print k,pos(n,k),lstMatchings[k].size(),lstIndex[k].size(),lstMatchlist[k].size()
-        if lstMatchings[k].size()> (<int>20):
-            outArray = numpy.zeros((lstMatchlist[k].size(), 4), dtype="float32")
+        tmpMatchlist = lstMatchlist[k] 
+        print "point %i images pair: %s found %i ctrl pt -> %i"%(k,pos(n,k),lstMatchinglist[k].size(),lstIndex[k].size())
+        if tmpMatchlist.size()==0:
+            out[pos(n,k)] = None
+        elif tmpMatchlist.size()<=20:
+            outArray = numpy.zeros((tmpMatchlist.size(), 4), dtype="float32")
+            for p in range(tmpMatchlist.size()):
+                outArray[p,0] = tmpMatchlist[p].y1
+                outArray[p,1] = tmpMatchlist[p].x1
+                outArray[p,2] = tmpMatchlist[p].y2
+                outArray[p,3] = tmpMatchlist[p].x2
+            out[pos(n,k)] = outArray
+        else:
+            outArray = numpy.zeros((lstIndex[k].size(), 4), dtype="float32")
             for p in range(lstIndex[k].size()):
                 i=<int>lstIndex[k][p]
-                outArray[p,0] = lstMatchings[k][i].first.y
-                outArray[p,1] = lstMatchings[k][i].first.x
-                outArray[p,2] = lstMatchings[k][i].second.y
-                outArray[p,3] = lstMatchings[k][i].second.x
-        else:
-            outArray = numpy.zeros((lstMatchings[k].size(), 4), dtype="float32")
-            for p in range(lstMatchings[k].size()):
-                outArray[p,0] = lstMatchings[k][p].first.y
-                outArray[p,1] = lstMatchings[k][p].first.x
-                outArray[p,2] = lstMatchings[k][p].second.y
-                outArray[p,3] = lstMatchings[k][p].second.x
-        out[pos(n,k)] = outArray
-    #del lstInput,lstKeypointslist,lstWidth,lstHeight
+                outArray[p,0] = tmpMatchlist[i].y1
+                outArray[p,1] = tmpMatchlist[i].x1
+                outArray[p,2] = tmpMatchlist[i].y2
+                outArray[p,3] = tmpMatchlist[i].x2
+            out[pos(n,k)] = outArray
     return out
 
 #    
@@ -482,4 +504,34 @@ def reduce_orsa(numpy.ndarray inp not None, shape=None,bool verbose=False):
         out[i,2] = data[p,2]
         out[i,3] = data[p,3]
     return out
+
+cdef void printCtrlPointSift(keypointslist kpt, int maxLines=10):
+    """
+    Print the control points 
+    """
+    cdef int i
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((kpt.size(), 4), dtype="float32")
+    for i in range(kpt.size()):
+        out[i,0]=kpt[i].x
+        out[i,1]=kpt[i].y
+        out[i,2]=kpt[i].scale
+        out[i,3]=kpt[i].angle
+    out.sort(axis=0)
+    for i in range(min(maxLines,kpt.size())):
+        print out[i]
+
+cdef void printMatching(matchingslist match, int maxLines=10):
+    """
+    Print the matching control points 
+    """
+    cdef int i
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((match.size(), 4), dtype="float32")
+    for i in range(match.size()):
+        out[i,0]=match[i].first.x
+        out[i,1]=match[i].first.y
+        out[i,2]=match[i].second.x
+        out[i,3]=match[i].second.y
+    out.sort(axis=0)
+    for i in range(min(maxLines,match.size())):
+        print out[i]
 
