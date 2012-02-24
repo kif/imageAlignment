@@ -276,12 +276,12 @@ def sift(*listArg, bool verbose=False):
     Call SIFT on a pair of images
     @param *listArg: images 
     @type *listArg: numpy ndarray
+    @param verbose: print informations when finished
+    @type verbose: boolean
     @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
     """
+    t0=time.time()
     cdef int i,j,k,n,m,p,t
-    cdef keypointslist tmpKp
-    cdef matchingslist tmpMp
-    cdef flimage tmpImg
     cdef vector[flimage] lstInput
     cdef vector [keypointslist] lstKeypointslist
     cdef vector[matchingslist] lstMatchinglist
@@ -291,7 +291,7 @@ def sift(*listArg, bool verbose=False):
     cdef numpy.ndarray[numpy.float32_t, ndim = 1] tmpNPA
     cdef siftPar para
     cdef int t_value_orsa = 10000
-    cdef int verb_value_orsa = verbose
+    cdef int verb_value_orsa = 0
     cdef int n_flag_value_orsa = 0
     cdef int mode_value_orsa = 2
     cdef int stop_value_orsa = 0
@@ -312,12 +312,11 @@ def sift(*listArg, bool verbose=False):
         lstMatchlist.push_back(tmpMatchlist)
         lstIndex.push_back(tmpIdx)
     
-    t=time.time()
+    t1=time.time()
     with nogil:
         for i in prange(n):
             compute_sift_keypoints_flimage(lstInput[i], lstKeypointslist[i], para)
-    t1=time.time()
-    print("Parallel SIFT took %.3fs for %i images"%((t1-t),n))
+    t2=time.time()
     with nogil:
         for k in prange(m):
             #Calculate indexes
@@ -330,8 +329,7 @@ def sift(*listArg, bool verbose=False):
                     t=t-(n-i-1)
             #i,j = pos(n,k)
             compute_sift_matches(lstKeypointslist[i], lstKeypointslist[j], lstMatchinglist[k], para)
-    t2=time.time()
-    print("Parallel Matching took %.3fs for %i pairs of images"%((t2-t1),m))
+    t3=time.time()
     #with nogil:
     for k in range(m):
             for p in range(<int> lstMatchinglist[k].size()):
@@ -340,21 +338,18 @@ def sift(*listArg, bool verbose=False):
                                  x2=lstMatchinglist[k][p].second.x,
                                  y2=lstMatchinglist[k][p].second.y)
                 lstMatchlist[k].push_back(tmpMatch)
-    t3=time.time()
-    print("Serial copy took %.3fs for %i pairs of images"%((t3-t2),m))
+    t4=time.time()
     with nogil:
         for k in prange(m):
             if (<int> lstMatchinglist[k].size()) >(<int>20):
                 nfa = orsa((lstInput[i].nwidth()+lstInput[j].nwidth())/2, (lstInput[i].nheight()+lstInput[j].nheight())/2,
                                 lstMatchlist[k], lstIndex[k],
                                 t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa)
-    t4=time.time()
-    print("Parallel ORSA took %.3fs for %i pairs of images"%((t4-t3),m))
+    t5=time.time()
     out = {}
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] outArray
     for k in range(m):
         tmpMatchlist = lstMatchlist[k] 
-        print "point %i images pair: %s found %i ctrl pt -> %i"%(k,pos(n,k),lstMatchinglist[k].size(),lstIndex[k].size())
         if tmpMatchlist.size()==0:
             out[pos(n,k)] = None
         elif tmpMatchlist.size()<=20:
@@ -374,6 +369,18 @@ def sift(*listArg, bool verbose=False):
                 outArray[p,2] = tmpMatchlist[i].y2
                 outArray[p,3] = tmpMatchlist[i].x2
             out[pos(n,k)] = outArray
+    t6 = time.time()
+    print verbose
+    if verbose:
+        print("Serial setup for SIFT took %.3fs for %i images"%((t1-t0),n))
+        print("Parallel SIFT took %.3fs for %i images"%((t2-t1),n))
+        print("Parallel Matching took %.3fs for %i pairs of images"%((t3-t2),m))
+        print("Serial copy took %.3fs for %i pairs of images"%((t4-t3),m))
+        print("Parallel ORSA took %.3fs for %i pairs of images"%((t5-t4),m))
+        print("Serial build of numpy arrays took %.3fs for %i pairs of images"%((t6-t5),m))
+        for k in range(m):
+            print("point %i images pair: %s found %i ctrl pt -> %i"%(k,pos(n,k),lstMatchinglist[k].size(),lstIndex[k].size()))
+
     return out
 
 #    
