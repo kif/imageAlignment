@@ -347,7 +347,7 @@ if __name__ == "__main__":
             j = numpy.fromstring(i.convert("F").tostring(), dtype="float32")
             j.shape = -1, i.size[0]
             l.append(j)
-    imshow(stitch(*l))
+    imshow(stitch(*l), cmap="gray")
     show()
 #    d = feature.sift(*l, verbose=True)
 #    k = d.keys()

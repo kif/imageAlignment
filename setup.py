@@ -28,14 +28,23 @@ __author__ = "Jerome Kieffer"
 __copyright__ = "2012, ESRF"
 __license__ = "LGPL"
 
+import sys
 from distutils.core import setup
-from Cython.Distutils.extension import Extension
-from Cython.Distutils import build_ext
 import glob
 from numpy.distutils.misc_util import get_numpy_include_dirs
 
+if sys.version_info < (2, 6):
+    src = sources = ["feature.cpp"]
+    from distutils.core import Extension
+    build_ext = None
+else:
+    src = sources = ["feature.pyx"]
+    from Cython.Distutils.extension import Extension
+    from Cython.Distutils import build_ext
+
 feature_ext = Extension(name="feature",
-                    sources=["feature.pyx"] + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp"),
+
+                    sources=src + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp"),
                     include_dirs=get_numpy_include_dirs(),
                     language="c++",
 #                    libraries=["stdc++"],
