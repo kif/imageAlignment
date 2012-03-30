@@ -239,7 +239,7 @@ def sift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
 #    del matchings, k1, k2, para
     return out
 
-def pos(int n, int k):
+def pos(int n, int k,bool vs_first=False):
     """get postion i,j from index k in an upper-filled square array 
     [ 0 0 1 2 3 ]
     [ 0 0 4 5 6 ]
@@ -259,6 +259,8 @@ def pos(int n, int k):
     pos(5,0): (0, 1)
 
     """
+    if vs_first:
+        return 0,k+1
     cdef int i,j
     for i in range(n):
         if k<(n-i-1):
@@ -271,13 +273,15 @@ def pos(int n, int k):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def sift(*listArg, bool verbose=False):
+def sift(*listArg, bool verbose=False, bool vs_first=False):
     """
     Call SIFT on a pair of images
     @param *listArg: images 
     @type *listArg: numpy ndarray
     @param verbose: print informations when finished
     @type verbose: boolean
+    @param vs_first: calculate sift always vs first img
+    @type vs_first: boolean
     @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
     """
     t0=time.time()
@@ -306,7 +310,10 @@ def sift(*listArg, bool verbose=False):
             lstInput.push_back(flimage(<int>obj.shape[1],<int>obj.shape[0],<float*> tmpNPA.data))
             lstKeypointslist.push_back(keypointslist())
     n=lstInput.size()
-    m=n*(n-1)/2
+    if vs_first:
+        m=n-1
+    else:
+        m=n*(n-1)/2
     for k in range(m):
         lstMatchinglist.push_back(matchingslist())
         lstMatchlist.push_back(tmpMatchlist)
@@ -320,13 +327,17 @@ def sift(*listArg, bool verbose=False):
     with nogil:
         for k in prange(m):
             #Calculate indexes
-            t=k
-            for i in range(n):
-                if t<(n-i-1):
-                    j=i+1+t 
-                    break
-                else:
-                    t=t-(n-i-1)
+            if vs_first:
+               i=0
+               j=1+k 
+            else:
+                t=k
+                for i in range(n):
+                    if t<(n-i-1):
+                        j=i+1+t 
+                        break
+                    else:
+                        t=t-(n-i-1)
             #i,j = pos(n,k)
             compute_sift_matches(lstKeypointslist[i], lstKeypointslist[j], lstMatchinglist[k], para)
     t3=time.time()
@@ -351,7 +362,7 @@ def sift(*listArg, bool verbose=False):
     for k in range(m):
         tmpMatchlist = lstMatchlist[k] 
         if tmpMatchlist.size()==0:
-            out[pos(n,k)] = None
+            out[pos(n,k,vs_first)] = None
         elif tmpMatchlist.size()<=20:
             outArray = numpy.zeros((tmpMatchlist.size(), 4), dtype="float32")
             for p in range(tmpMatchlist.size()):
@@ -359,7 +370,7 @@ def sift(*listArg, bool verbose=False):
                 outArray[p,1] = tmpMatchlist[p].x1
                 outArray[p,2] = tmpMatchlist[p].y2
                 outArray[p,3] = tmpMatchlist[p].x2
-            out[pos(n,k)] = outArray
+            out[pos(n,k,vs_first)] = outArray
         else:
             outArray = numpy.zeros((lstIndex[k].size(), 4), dtype="float32")
             for p in range(lstIndex[k].size()):
@@ -368,7 +379,7 @@ def sift(*listArg, bool verbose=False):
                 outArray[p,1] = tmpMatchlist[i].x1
                 outArray[p,2] = tmpMatchlist[i].y2
                 outArray[p,3] = tmpMatchlist[i].x2
-            out[pos(n,k)] = outArray
+            out[pos(n,k,vs_first)] = outArray
     t6 = time.time()
     print verbose
     if verbose:

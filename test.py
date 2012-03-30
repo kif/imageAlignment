@@ -8,6 +8,30 @@ import matplotlib
 from pylab import *
 import time
 from itertools import combinations, permutations
+import Image
+import multiprocessing
+
+
+def img2array(fn):
+    i=Image.open(fn)
+    i.load()
+    j = numpy.fromstring(i.convert("F").tostring(), dtype="float32")
+    j.shape = -1, i.size[0]
+    return j
+
+def siftManyImg(fn, nbcpu=None,cut=2000):
+    result={}
+    if not nbcpu:
+        nbcpu = multiprocessing.cpu_count()
+    for i in range((len(fn)-1)//nbcpu+1):
+        lf=[fn[0]]+[fn[j+1] for j in range(i*nbcpu,(i+1)*nbcpu) if j<len(fn)-1]
+        print lf
+        ld=[img2array(j)[cut:] for j in lf]
+        dr=feature.sift(*ld,verbose=False,vs_first=True)
+        for k,v in dr.items():
+            result[(lf[k[0]],lf[k[1]])]=v
+            print(lf[k[0]],lf[k[1]],calcShift(v))
+    return result
 
 def Visual(im1, im2, ctrlPt):
     s00, s01 = im1.shape
@@ -78,7 +102,7 @@ def calcShift(npa, mask=None):
     assert m == 4
     v0 = npa[:, 0] - npa[:, 2]
     v1 = npa[:, 1] - npa[:, 3]
-    return scipy.median(v0), scipy.median(v1)
+    return numpy.median(v0), numpy.median(v1)
 
 
 def stitch(*img):
@@ -152,8 +176,8 @@ class setOfOffsets(object):
                 self.idxMax = key[1]
             if  val.shape[1] == 2:
                 self.offsets[key] = val
-                m0 = scipy.median(val[0])
-                m1 = scipy.median(val[1])
+                m0 = numpy.median(val[0])
+                m1 = numpy.median(val[1])
                 self.shifts[key] = numpy.array([m0, m1])
             elif val.shape[1] == 4:
                 self.offsets[key] = val[:, :2] - val[:, 2:]
@@ -294,7 +318,7 @@ if __name__ == "__main__":
 #    out = feature.asift2(lena1, lena2, verbose=0)
 #    out = Visual_ASIFT(lena1, lena2)
 #    print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
-#    print "Median", scipy.median(out[:, 0] - out[:, 2]), scipy.median(out[:, 1] - out[:, 3])
+#    print "Median", numpy.median(out[:, 0] - out[:, 2]), numpy.median(out[:, 1] - out[:, 3])
 #    raw_input("Enter to continue")
 #    print "clacShift", calcShift(out)
     """
@@ -339,7 +363,7 @@ if __name__ == "__main__":
         l = (l00, l01, l02, l03, l10, l11, l12, l13, l20, l21, l22, l23, l30, l31, l32, l33)
     else:
         import Image
-        I = [Image.open(i) for i in sys.argv[1:] if i.endswith(".jpg")]
+        I = [Image.open(i) for i in sys.argv[1:] if i.lower().endswith(".jpg") or i.lower().endswith(".tif")]
         l = []
         for i in I:
             print i
