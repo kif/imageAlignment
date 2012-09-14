@@ -38,6 +38,8 @@ cimport numpy
 from libcpp cimport bool
 from libcpp.pair  cimport pair
 from libcpp.vector cimport vector
+from cpython cimport pythread
+from cpython.exc cimport PyErr_NoMemory
 
 cdef extern from "surf/image.h":
     cdef cppclass image:
@@ -198,6 +200,7 @@ def normalize_image(numpy.ndarray img not None):
     mini = img.min()
     return numpy.ascontiguousarray(255. * (img - mini) / (maxi - mini),dtype=numpy.float32)
 
+
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -220,11 +223,11 @@ def sift2(img1, img2, bool verbose=False):
     if verbose:
         import time
         t0 = time.time()
-        compute_sift_keypoints(< float *> data1[0,0], k1, data1.shape[1], data1.shape[0], para);
+        compute_sift_keypoints(< float *> &data1[0,0], k1, data1.shape[1], data1.shape[0], para);
         t1 = time.time()
         print "SIFT took %.3fs image1: %i ctrl points" % (t1 - t0, k1.size())
         t1 = time.time()
-        compute_sift_keypoints(< float *> data2[0,0], k2, data2.shape[1], data2.shape[0], para);
+        compute_sift_keypoints(< float *> &data2[0,0], k2, data2.shape[1], data2.shape[0], para);
         t2 = time.time()
         print "SIFT took %.3fs image2: %i ctrl points" % (t2 - t1, k2.size())
         t2 = time.time()
@@ -232,8 +235,8 @@ def sift2(img1, img2, bool verbose=False):
         print("Matching: %s point, took %.3fs " % (matchings.size(), time.time() - t2))
     else:
         with nogil:
-            compute_sift_keypoints(< float *> data1[0,0], k1, data1.shape[1], data1.shape[0], para);
-            compute_sift_keypoints(< float *> data2[0,0], k2, data2.shape[1], data2.shape[0], para);
+            compute_sift_keypoints(< float *> &data1[0,0], k1, data1.shape[1], data1.shape[0], para);
+            compute_sift_keypoints(< float *> &data2[0,0], k2, data2.shape[1], data2.shape[0], para);
             compute_sift_matches(k1, k2, matchings, para);
 
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype="float32")
@@ -399,7 +402,68 @@ def sift(*listArg, bool verbose=False, bool vs_first=False):
 
     return out
 
-#
+
+cdef class SiftAlignment:
+    cdef vector [keypointslist] vectKeypointslist
+    cdef siftPar sift_parameters
+    cdef FastRLock lock
+    
+    def __cinit__(self):
+        default_sift_parameters(self.sift_parameters)
+        self.lock = FastRLock()
+    
+    def __dealloc__(self):
+        self.lock = None
+        self.vectKeypointslist.empty()
+        
+    def clear(self):
+        """
+        Empty the vector of keypoints.
+        """
+        with self.lock:
+            self.vectKeypointslist.empty()
+    
+    @cython.boundscheck(False)
+    def sift(self, numpy.ndarray img not None):
+        """
+        Calculate the SIFT descriptor for an image and stores it.
+        
+        @param img: 2D numpy array representing the image
+        @return: index of keypoints in the list 
+        """
+        cdef float[:,:] data = normalize_image(img)
+        cdef keypointslist kp
+        cdef size_t idx
+        with nogil:
+            compute_sift_keypoints(< float *> &data[0,0], kp, data.shape[1], data.shape[0], self.sift_parameters)
+        with self.lock:
+            self.vectKeypointslist.push_back(kp)
+            idx = self.vectKeypointslist.size()-1
+        return idx
+
+    @cython.boundscheck(False)
+    def match(self, size_t idx1, size_t idx2):
+        """
+        calculate the matching between two images already analyzed.
+        
+        @param idx1, idx2: indexes of the images in the stored
+        @return:   n x 4 numpy ndarray with [y1,x1,y2,x2] control points. 
+        """
+        cdef size_t i, max_size =self.vectKeypointslist.size() 
+        if idx1>max_size or idx2>max_size:
+            raise IndexError("Currently %i images have been processed and you requested image %i and %i"%(max_size,idx1,idx2)) 
+        cdef keypointslist kp1=self.vectKeypointslist[idx1], kp2=self.vectKeypointslist[idx2]
+        cdef matchingslist matchings
+        with nogil:
+            compute_sift_matches(kp1, kp2, matchings, self.sift_parameters);
+        cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype="float32")
+        for i in range(matchings.size()):
+            out[i, 0] = matchings[i].first.y
+            out[i, 1] = matchings[i].first.x
+            out[i, 2] = matchings[i].second.y
+            out[i, 3] = matchings[i].second.x
+        return out
+    
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -557,4 +621,122 @@ cdef void printMatching(matchingslist match, int maxLines=10):
     out.sort(axis=0)
     for i in range(min(maxLines,match.size())):
         print out[i]
+
+## {{{ http://code.activestate.com/recipes/577336/ (r3)
+
+cdef class FastRLock:
+    """Fast, re-entrant locking.
+
+    Under uncongested conditions, the lock is never acquired but only
+    counted.  Only when a second thread comes in and notices that the
+    lock is needed, it acquires the lock and notifies the first thread
+    to release it when it's done.  This is all made possible by the
+    wonderful GIL.
+    """
+    cdef pythread.PyThread_type_lock _real_lock
+    cdef long _owner            # ID of thread owning the lock
+    cdef int _count             # re-entry count
+    cdef int _pending_requests  # number of pending requests for real lock
+    cdef bint _is_locked        # whether the real lock is acquired
+
+    def __cinit__(self):
+        self._owner = -1
+        self._count = 0
+        self._is_locked = False
+        self._pending_requests = 0
+        self._real_lock = pythread.PyThread_allocate_lock()
+        if self._real_lock is NULL:
+            PyErr_NoMemory()
+
+    def __dealloc__(self):
+        if self._real_lock is not NULL:
+            pythread.PyThread_free_lock(self._real_lock)
+            self._real_lock = NULL
+
+    def acquire(self, bint blocking=True):
+        return lock_lock(self, pythread.PyThread_get_thread_ident(), blocking)
+
+    def release(self):
+        if self._owner != pythread.PyThread_get_thread_ident():
+            raise RuntimeError("cannot release un-acquired lock")
+        unlock_lock(self)
+
+    # compatibility with threading.RLock
+
+    def __enter__(self):
+        # self.acquire()
+        return lock_lock(self, pythread.PyThread_get_thread_ident(), True)
+
+    def __exit__(self, t, v, tb):
+        # self.release()
+        if self._owner != pythread.PyThread_get_thread_ident():
+            raise RuntimeError("cannot release un-acquired lock")
+        unlock_lock(self)
+
+    def _is_owned(self):
+        return self._owner == pythread.PyThread_get_thread_ident()
+
+
+cdef inline bint lock_lock(FastRLock lock, long current_thread, bint blocking) nogil:
+    # Note that this function *must* hold the GIL when being called.
+    # We just use 'nogil' in the signature to make sure that no Python
+    # code execution slips in that might free the GIL
+
+    if lock._count:
+        # locked! - by myself?
+        if current_thread == lock._owner:
+            lock._count += 1
+            return 1
+    elif not lock._pending_requests:
+        # not locked, not requested - go!
+        lock._owner = current_thread
+        lock._count = 1
+        return 1
+    # need to get the real lock
+    return _acquire_lock(
+        lock, current_thread,
+        pythread.WAIT_LOCK if blocking else pythread.NOWAIT_LOCK)
+
+cdef bint _acquire_lock(FastRLock lock, long current_thread, int wait) nogil:
+    # Note that this function *must* hold the GIL when being called.
+    # We just use 'nogil' in the signature to make sure that no Python
+    # code execution slips in that might free the GIL
+
+    if not lock._is_locked and not lock._pending_requests:
+        # someone owns it but didn't acquire the real lock - do that
+        # now and tell the owner to release it when done. Note that we
+        # do not release the GIL here as we must absolutely be the one
+        # who acquires the lock now.
+        if not pythread.PyThread_acquire_lock(lock._real_lock, wait):
+            return 0
+        #assert not lock._is_locked
+        lock._is_locked = True
+    lock._pending_requests += 1
+    with nogil:
+        # wait for the lock owning thread to release it
+        locked = pythread.PyThread_acquire_lock(lock._real_lock, wait)
+    lock._pending_requests -= 1
+    #assert not lock._is_locked
+    #assert lock._count == 0
+    if not locked:
+        return 0
+    lock._is_locked = True
+    lock._owner = current_thread
+    lock._count = 1
+    return 1
+
+cdef inline void unlock_lock(FastRLock lock) nogil:
+    # Note that this function *must* hold the GIL when being called.
+    # We just use 'nogil' in the signature to make sure that no Python
+    # code execution slips in that might free the GIL
+
+    #assert lock._owner == pythread.PyThread_get_thread_ident()
+    #assert lock._count > 0
+    lock._count -= 1
+    if lock._count == 0:
+        lock._owner = -1
+        if lock._is_locked:
+            pythread.PyThread_release_lock(lock._real_lock)
+            lock._is_locked = False
+## end of http://code.activestate.com/recipes/577336/ }}}
 
