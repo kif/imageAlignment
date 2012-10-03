@@ -41,101 +41,9 @@ from libcpp.vector cimport vector
 from cpython cimport pythread
 from cpython.exc cimport PyErr_NoMemory
 
-cdef extern from "surf/image.h":
-    cdef cppclass image:
-        image(int , int)
-        int idImage
-        int width, height
-        float * img
-
-cdef extern from "surf/keypoint.h":
-    cdef cppclass keyPoint:
-#        keyPoint() #
-        keypoint(float, float, float, float, bool)
-        float    x, y, scale, orientation
-        bool     signLaplacian
-#    typedef  std::vector < keyPoint *> listKeyPoints
-    ctypedef vector[ keyPoint *] listKeyPoints
-
-cdef extern from "surf/descriptor.h":
-    cdef cppclass descriptor:
-        descriptor()
-        descriptor(descriptor *)
-        keyPoint * kP
-    #std::vector<descriptor*> listDescriptor;
-    ctypedef  vector[ descriptor * ] listDescriptor
-    listDescriptor * getKeyPoints(image * , int , int , listKeyPoints * , bool)nogil
-
-cdef extern from "surf/match.h":
-    #typedef std::pair<descriptor*,descriptor*> pairMatch;
-    ctypedef  pair[ descriptor  , descriptor  ] pairMatch
-    #typedef std::vector<pairMatch > listMatch;
-    ctypedef  vector[ pairMatch ] listMatch
-    listMatch * matchDescriptor(listDescriptor * , listDescriptor *)nogil
-
-cdef extern from "surf/lib.h":
-    int octave
-    int interval
-
-cdef extern from "surf/surf_match.h":
-    void get_points(listMatch * , float *)nogil
-
-cdef extern from "sift/flimage.h":
-    cdef cppclass flimage:
-        flimage()
-        flimage(int w, int h)
-        flimage(int w, int h, float v)
-        flimage(int w, int h, float* v)
-        int nwidth() nogil
-        int nheight() nogil
-
-cdef extern from "sift/demo_lib_sift.h":
-    struct keypoint:
-        float   x
-        float   y
-        float   scale
-        float   angle
-        float * vec
-    #typedef std::vector<keypoint> keypointslist;
-    ctypedef  vector[ keypoint ] keypointslist
-    struct siftPar:
-        int OctaveMax
-        int DoubleImSize
-        int order
-        float  InitSigma
-        int BorderDist
-        int Scales
-        float PeakThresh
-        float  EdgeThresh
-        float  EdgeThresh1
-        int OriBins
-        float OriSigma
-        float OriHistThresh
-        float  MaxIndexVal
-        int  MagFactor
-        float   IndexSigma
-        int  IgnoreGradSign
-        float MatchRatio
-        float MatchXradius
-        float MatchYradius
-        int noncorrectlylocalized
-    void default_sift_parameters(siftPar par)
-    void compute_sift_keypoints(float * input, keypointslist  keypoints, int width, int height, siftPar par) nogil
-    void compute_sift_keypoints_flimage(flimage img,keypointslist  keypoints, siftPar par) nogil
-
-    #typedef std::pair<keypoint,keypoint> matching;
-    ctypedef  pair[ keypoint  , keypoint  ] matching
-    #typedef std::vector<matching> matchingslist;
-    ctypedef  vector[ matching ] matchingslist
-    void compute_sift_matches(keypointslist keys1, keypointslist keys2, matchingslist matchings, siftPar par) nogil
-
-
-
-cdef extern from "asift/compute_asift_keypoints.h":
-    int compute_asift_keypoints(vector[float] image, int width, int height, int num_of_tilts, int verb, vector[ vector[ keypointslist ]] & keys_all, siftPar siftparameters) nogil
-cdef extern from "asift/compute_asift_matches.h":
-    int compute_asift_matches(int num_of_tilts1, int num_of_tilts2, int w1, int h1, int w2, int h2, int verb, vector[vector[keypointslist]] keys1, vector[vector[keypointslist]] keys2, matchingslist matchings, siftPar siftparameters) nogil
-
+from surf cimport  image, keyPoint, descriptor, listDescriptor, getKeyPoints
+from sift cimport  keypoint, keypointslist, default_sift_parameters, compute_sift_keypoints
+from asift cimport compute_asift_matches, compute_asift_keypoints
 cdef extern from "libMatch/match.h":
     struct Match:
         float x1, y1, x2, y2
@@ -198,7 +106,7 @@ def surf2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=F
 def normalize_image(numpy.ndarray img not None):
     maxi = img.max()
     mini = img.min()
-    return numpy.ascontiguousarray(255. * (img - mini) / (maxi - mini),dtype=numpy.float32)
+    return numpy.ascontiguousarray(255. * (img - mini) / (maxi - mini), dtype=numpy.float32)
 
 
 @cython.cdivision(True)
@@ -214,8 +122,8 @@ def sift2(img1, img2, bool verbose=False):
     @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
     """
     cdef size_t i
-    cdef float[:,:] data1 = normalize_image(img1)
-    cdef float[:,:] data2 = normalize_image(img2)
+    cdef float[:, :] data1 = normalize_image(img1)
+    cdef float[:, :] data2 = normalize_image(img2)
     cdef keypointslist k1, k2
     cdef siftPar para
     cdef matchingslist matchings
@@ -223,11 +131,11 @@ def sift2(img1, img2, bool verbose=False):
     if verbose:
         import time
         t0 = time.time()
-        compute_sift_keypoints(< float *> &data1[0,0], k1, data1.shape[1], data1.shape[0], para);
+        compute_sift_keypoints(< float *> & data1[0, 0], k1, data1.shape[1], data1.shape[0], para);
         t1 = time.time()
         print "SIFT took %.3fs image1: %i ctrl points" % (t1 - t0, k1.size())
         t1 = time.time()
-        compute_sift_keypoints(< float *> &data2[0,0], k2, data2.shape[1], data2.shape[0], para);
+        compute_sift_keypoints(< float *> & data2[0, 0], k2, data2.shape[1], data2.shape[0], para);
         t2 = time.time()
         print "SIFT took %.3fs image2: %i ctrl points" % (t2 - t1, k2.size())
         t2 = time.time()
@@ -235,8 +143,8 @@ def sift2(img1, img2, bool verbose=False):
         print("Matching: %s point, took %.3fs " % (matchings.size(), time.time() - t2))
     else:
         with nogil:
-            compute_sift_keypoints(< float *> &data1[0,0], k1, data1.shape[1], data1.shape[0], para);
-            compute_sift_keypoints(< float *> &data2[0,0], k2, data2.shape[1], data2.shape[0], para);
+            compute_sift_keypoints(< float *> & data1[0, 0], k1, data1.shape[1], data1.shape[0], para);
+            compute_sift_keypoints(< float *> & data2[0, 0], k2, data2.shape[1], data2.shape[0], para);
             compute_sift_matches(k1, k2, matchings, para);
 
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype="float32")
@@ -247,7 +155,7 @@ def sift2(img1, img2, bool verbose=False):
         out[i, 3] = matchings[i].second.x
     return out
 
-def pos(int n, int k,bool vs_first=False):
+def pos(int n, int k, bool vs_first=False):
     """get postion i,j from index k in an upper-filled square array
     [ 0 0 1 2 3 ]
     [ 0 0 4 5 6 ]
@@ -268,15 +176,15 @@ def pos(int n, int k,bool vs_first=False):
 
     """
     if vs_first:
-        return 0,k+1
-    cdef int i,j
+        return 0, k + 1
+    cdef int i, j
     for i in range(n):
-        if k<(n-i-1):
-            j=i+1+k
+        if k < (n - i - 1):
+            j = i + 1 + k
             break
         else:
-            k=k-(n-i-1)
-    return i,j
+            k = k - (n - i - 1)
+    return i, j
 
 @cython.cdivision(True)
 @cython.boundscheck(False)
@@ -292,8 +200,8 @@ def sift(*listArg, bool verbose=False, bool vs_first=False):
     @type vs_first: boolean
     @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
     """
-    t0=time.time()
-    cdef int i,j,k,n,m,p,t
+    t0 = time.time()
+    cdef int i, j, k, n, m, p, t
     cdef vector[flimage] lstInput
     cdef vector [keypointslist] lstKeypointslist
     cdef vector[matchingslist] lstMatchinglist
@@ -313,92 +221,92 @@ def sift(*listArg, bool verbose=False, bool vs_first=False):
 
     default_sift_parameters(para)
     for obj in listArg:
-        if isinstance(obj,numpy.ndarray):
-            tmpNPA=numpy.ascontiguousarray((255. * (obj.astype("float32") - obj.min()) / <float> (obj.max() - obj.min())).flatten())
-            lstInput.push_back(flimage(<int>obj.shape[1],<int>obj.shape[0],<float*> tmpNPA.data))
+        if isinstance(obj, numpy.ndarray):
+            tmpNPA = numpy.ascontiguousarray((255. * (obj.astype("float32") - obj.min()) / < float > (obj.max() - obj.min())).flatten())
+            lstInput.push_back(flimage(< int > obj.shape[1], < int > obj.shape[0], < float *> tmpNPA.data))
             lstKeypointslist.push_back(keypointslist())
-    n=lstInput.size()
+    n = lstInput.size()
     if vs_first:
-        m=n-1
+        m = n - 1
     else:
-        m=n*(n-1)/2
+        m = n * (n - 1) / 2
     for k in range(m):
         lstMatchinglist.push_back(matchingslist())
         lstMatchlist.push_back(tmpMatchlist)
         lstIndex.push_back(tmpIdx)
 
-    t1=time.time()
+    t1 = time.time()
     with nogil:
         for i in prange(n):
             compute_sift_keypoints_flimage(lstInput[i], lstKeypointslist[i], para)
-    t2=time.time()
+    t2 = time.time()
     with nogil:
         for k in prange(m):
             #Calculate indexes
             if vs_first:
-               i=0
-               j=1+k
+               i = 0
+               j = 1 + k
             else:
-                t=k
+                t = k
                 for i in range(n):
-                    if t<(n-i-1):
-                        j=i+1+t
+                    if t < (n - i - 1):
+                        j = i + 1 + t
                         break
                     else:
-                        t=t-(n-i-1)
+                        t = t - (n - i - 1)
             #i,j = pos(n,k)
             compute_sift_matches(lstKeypointslist[i], lstKeypointslist[j], lstMatchinglist[k], para)
-    t3=time.time()
+    t3 = time.time()
     #with nogil:
     for k in range(m):
-            for p in range(<int> lstMatchinglist[k].size()):
+            for p in range(< int > lstMatchinglist[k].size()):
                 tmpMatch = Match(x1=lstMatchinglist[k][p].first.x,
                                  y1=lstMatchinglist[k][p].first.y,
                                  x2=lstMatchinglist[k][p].second.x,
                                  y2=lstMatchinglist[k][p].second.y)
                 lstMatchlist[k].push_back(tmpMatch)
-    t4=time.time()
+    t4 = time.time()
     with nogil:
         for k in prange(m):
-            if (<int> lstMatchinglist[k].size()) >(<int>20):
-                nfa = orsa((lstInput[i].nwidth()+lstInput[j].nwidth())/2, (lstInput[i].nheight()+lstInput[j].nheight())/2,
+            if (< int > lstMatchinglist[k].size()) > (< int > 20):
+                nfa = orsa((lstInput[i].nwidth() + lstInput[j].nwidth()) / 2, (lstInput[i].nheight() + lstInput[j].nheight()) / 2,
                                 lstMatchlist[k], lstIndex[k],
                                 t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa)
-    t5=time.time()
+    t5 = time.time()
     out = {}
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] outArray
     for k in range(m):
         tmpMatchlist = lstMatchlist[k]
-        if tmpMatchlist.size()==0:
-            out[pos(n,k,vs_first)] = None
-        elif tmpMatchlist.size()<=20:
+        if tmpMatchlist.size() == 0:
+            out[pos(n, k, vs_first)] = None
+        elif tmpMatchlist.size() <= 20:
             outArray = numpy.zeros((tmpMatchlist.size(), 4), dtype="float32")
             for p in range(tmpMatchlist.size()):
-                outArray[p,0] = tmpMatchlist[p].y1
-                outArray[p,1] = tmpMatchlist[p].x1
-                outArray[p,2] = tmpMatchlist[p].y2
-                outArray[p,3] = tmpMatchlist[p].x2
-            out[pos(n,k,vs_first)] = outArray
+                outArray[p, 0] = tmpMatchlist[p].y1
+                outArray[p, 1] = tmpMatchlist[p].x1
+                outArray[p, 2] = tmpMatchlist[p].y2
+                outArray[p, 3] = tmpMatchlist[p].x2
+            out[pos(n, k, vs_first)] = outArray
         else:
             outArray = numpy.zeros((lstIndex[k].size(), 4), dtype="float32")
             for p in range(lstIndex[k].size()):
-                i=<int>lstIndex[k][p]
-                outArray[p,0] = tmpMatchlist[i].y1
-                outArray[p,1] = tmpMatchlist[i].x1
-                outArray[p,2] = tmpMatchlist[i].y2
-                outArray[p,3] = tmpMatchlist[i].x2
-            out[pos(n,k,vs_first)] = outArray
+                i = < int > lstIndex[k][p]
+                outArray[p, 0] = tmpMatchlist[i].y1
+                outArray[p, 1] = tmpMatchlist[i].x1
+                outArray[p, 2] = tmpMatchlist[i].y2
+                outArray[p, 3] = tmpMatchlist[i].x2
+            out[pos(n, k, vs_first)] = outArray
     t6 = time.time()
     print verbose
     if verbose:
-        print("Serial setup for SIFT took %.3fs for %i images"%((t1-t0),n))
-        print("Parallel SIFT took %.3fs for %i images"%((t2-t1),n))
-        print("Parallel Matching took %.3fs for %i pairs of images"%((t3-t2),m))
-        print("Serial copy took %.3fs for %i pairs of images"%((t4-t3),m))
-        print("Parallel ORSA took %.3fs for %i pairs of images"%((t5-t4),m))
-        print("Serial build of numpy arrays took %.3fs for %i pairs of images"%((t6-t5),m))
+        print("Serial setup for SIFT took %.3fs for %i images" % ((t1 - t0), n))
+        print("Parallel SIFT took %.3fs for %i images" % ((t2 - t1), n))
+        print("Parallel Matching took %.3fs for %i pairs of images" % ((t3 - t2), m))
+        print("Serial copy took %.3fs for %i pairs of images" % ((t4 - t3), m))
+        print("Parallel ORSA took %.3fs for %i pairs of images" % ((t5 - t4), m))
+        print("Serial build of numpy arrays took %.3fs for %i pairs of images" % ((t6 - t5), m))
         for k in range(m):
-            print("point %i images pair: %s found %i ctrl pt -> %i"%(k,pos(n,k),lstMatchinglist[k].size(),lstIndex[k].size()))
+            print("point %i images pair: %s found %i ctrl pt -> %i" % (k, pos(n, k), lstMatchinglist[k].size(), lstIndex[k].size()))
 
     return out
 
@@ -407,22 +315,20 @@ cdef class SiftAlignment:
     cdef vector [keypointslist] vectKeypointslist
     cdef siftPar sift_parameters
     cdef FastRLock lock
-    
     def __cinit__(self):
         default_sift_parameters(self.sift_parameters)
         self.lock = FastRLock()
-    
     def __dealloc__(self):
         self.lock = None
         self.vectKeypointslist.empty()
-        
+
     def clear(self):
         """
         Empty the vector of keypoints.
         """
         with self.lock:
             self.vectKeypointslist.empty()
-    
+
     @cython.boundscheck(False)
     def sift(self, numpy.ndarray img not None):
         """
@@ -431,14 +337,15 @@ cdef class SiftAlignment:
         @param img: 2D numpy array representing the image
         @return: index of keypoints in the list 
         """
-        cdef float[:,:] data = normalize_image(img)
+        cdef float[:, :] data = normalize_image(img)
         cdef keypointslist kp
         cdef size_t idx
         with nogil:
-            compute_sift_keypoints(< float *> &data[0,0], kp, data.shape[1], data.shape[0], self.sift_parameters)
+            compute_sift_keypoints(< float *> & data[0, 0], kp, data.shape[1], data.shape[0], self.sift_parameters)
         with self.lock:
             self.vectKeypointslist.push_back(kp)
-            idx = self.vectKeypointslist.size()-1
+            idx = self.vectKeypointslist.size() - 1
+        self.dict_image[idx] = kp
         return idx
 
     @cython.boundscheck(False)
@@ -449,10 +356,10 @@ cdef class SiftAlignment:
         @param idx1, idx2: indexes of the images in the stored
         @return:   n x 4 numpy ndarray with [y1,x1,y2,x2] control points. 
         """
-        cdef size_t i, max_size =self.vectKeypointslist.size() 
-        if idx1>max_size or idx2>max_size:
-            raise IndexError("Currently %i images have been processed and you requested image %i and %i"%(max_size,idx1,idx2)) 
-        cdef keypointslist kp1=self.vectKeypointslist[idx1], kp2=self.vectKeypointslist[idx2]
+        cdef size_t i, max_size = self.vectKeypointslist.size()
+        if idx1 > max_size or idx2 > max_size:
+            raise IndexError("Currently %i images have been processed and you requested image %i and %i" % (max_size, idx1, idx2))
+        cdef keypointslist kp1 = self.vectKeypointslist[idx1], kp2 = self.vectKeypointslist[idx2]
         cdef matchingslist matchings
         with nogil:
             compute_sift_matches(kp1, kp2, matchings, self.sift_parameters);
@@ -463,7 +370,7 @@ cdef class SiftAlignment:
             out[i, 2] = matchings[i].second.y
             out[i, 3] = matchings[i].second.x
         return out
-    
+
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -538,7 +445,7 @@ def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def reduce_orsa(numpy.ndarray inp not None, shape=None,bool verbose=False):
+def reduce_orsa(numpy.ndarray inp not None, shape=None, bool verbose=False):
     """
     Call ORSA (keypoint checking)
     @param inp: n*4 ot n*2*2 array representing keypoints.
@@ -548,10 +455,10 @@ def reduce_orsa(numpy.ndarray inp not None, shape=None,bool verbose=False):
     @return: 2D array with n control points and 4 coordinates: in1_0,in1_1,in2_0,in2_1
     """
 
-    cdef int i, num_matchings, insize,p
-    cdef numpy.ndarray[numpy.float32_t, ndim = 2] data = numpy.ascontiguousarray(inp.astype("float32").reshape(-1,4))
+    cdef int i, num_matchings, insize, p
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] data = numpy.ascontiguousarray(inp.astype("float32").reshape(-1, 4))
     insize = data.shape[0]
-    if insize<10:
+    if insize < 10:
         return data
     cdef vector [ Match ]  match_coor = vector [ Match ](< size_t > insize)
     cdef int t_value_orsa = 10000
@@ -560,36 +467,36 @@ def reduce_orsa(numpy.ndarray inp not None, shape=None,bool verbose=False):
     cdef int mode_value_orsa = 2
     cdef int stop_value_orsa = 0
     cdef float nfa
-    cdef int width,heigh
+    cdef int width, heigh
     if shape is None:
-        width = int(1+max(data[:,1].max(),data[:,3].max()))
-        heigh = int(1+max(data[:,0].max(),data[:,2].max()))
-    elif hasattr(shape,"__len__") and len(shape)>=2:
+        width = int(1 + max(data[:, 1].max(), data[:, 3].max()))
+        heigh = int(1 + max(data[:, 0].max(), data[:, 2].max()))
+    elif hasattr(shape, "__len__") and len(shape) >= 2:
         width = int(shape[1])
         heigh = int(shape[0])
     else:
         width = heigh = int(shape)
     cdef vector [ float ] index = vector [ float ](< size_t > data.shape[0])
-    tmatch=time.time()
+    tmatch = time.time()
     with nogil:
         for i in range(data.shape[0]):
-            match_coor[i].y1 = < float > data[i,0]
-            match_coor[i].x1 = < float > data[i,1]
-            match_coor[i].y2 = < float > data[i,2]
-            match_coor[i].x2 = < float > data[i,3]
+            match_coor[i].y1 = < float > data[i, 0]
+            match_coor[i].x1 = < float > data[i, 1]
+            match_coor[i].y2 = < float > data[i, 2]
+            match_coor[i].x2 = < float > data[i, 3]
     # epipolar filtering with the Moisan - Stival ORSA algorithm.
         nfa = orsa(width, heigh, match_coor, index, t_value_orsa, verb_value_orsa, n_flag_value_orsa, mode_value_orsa, stop_value_orsa)
     tend = time.time()
     num_matchings = index.size()
     if verbose:
-        print("Matching with ORSA: %s => %s, took %.3fs, nfs=%s" % (insize, num_matchings, tend-tmatch,nfa))
+        print("Matching with ORSA: %s => %s, took %.3fs, nfs=%s" % (insize, num_matchings, tend - tmatch, nfa))
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((num_matchings, 4), dtype="float32")
     for i in range(index.size()):
-        p=<int>index[i]
-        out[i,0] = data[p,0]
-        out[i,1] = data[p,1]
-        out[i,2] = data[p,2]
-        out[i,3] = data[p,3]
+        p = < int > index[i]
+        out[i, 0] = data[p, 0]
+        out[i, 1] = data[p, 1]
+        out[i, 2] = data[p, 2]
+        out[i, 3] = data[p, 3]
     return out
 
 cdef void printCtrlPointSift(keypointslist kpt, int maxLines=10):
@@ -599,12 +506,12 @@ cdef void printCtrlPointSift(keypointslist kpt, int maxLines=10):
     cdef int i
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((kpt.size(), 4), dtype="float32")
     for i in range(kpt.size()):
-        out[i,0]=kpt[i].x
-        out[i,1]=kpt[i].y
-        out[i,2]=kpt[i].scale
-        out[i,3]=kpt[i].angle
+        out[i, 0] = kpt[i].x
+        out[i, 1] = kpt[i].y
+        out[i, 2] = kpt[i].scale
+        out[i, 3] = kpt[i].angle
     out.sort(axis=0)
-    for i in range(min(maxLines,kpt.size())):
+    for i in range(min(maxLines, kpt.size())):
         print out[i]
 
 cdef void printMatching(matchingslist match, int maxLines=10):
@@ -614,12 +521,12 @@ cdef void printMatching(matchingslist match, int maxLines=10):
     cdef int i
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((match.size(), 4), dtype="float32")
     for i in range(match.size()):
-        out[i,0]=match[i].first.x
-        out[i,1]=match[i].first.y
-        out[i,2]=match[i].second.x
-        out[i,3]=match[i].second.y
+        out[i, 0] = match[i].first.x
+        out[i, 1] = match[i].first.y
+        out[i, 2] = match[i].second.x
+        out[i, 3] = match[i].second.y
     out.sort(axis=0)
-    for i in range(min(maxLines,match.size())):
+    for i in range(min(maxLines, match.size())):
         print out[i]
 
 ## {{{ http://code.activestate.com/recipes/577336/ (r3)
