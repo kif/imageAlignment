@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 #
-#    Project: Image Alignment  
-#             
+#    Project: Image Alignment
+#
 #
 #    File: "$Id$"
 #
@@ -24,7 +24,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-__author__ = "Jerome Kieffer"
+__author__ = "Jérôme Kieffer"
 __copyright__ = "2012, ESRF"
 __license__ = "LGPL"
 
@@ -33,29 +33,30 @@ from distutils.core import setup
 import glob
 from numpy.distutils.misc_util import get_numpy_include_dirs
 
+cython_src = ["feature"]#, "rlock"]
+
 if sys.version_info < (2, 6):
-    src = sources = ["feature.cpp"]
+    src = [i + ".cpp" for i in cython_src]
     from distutils.core import Extension
     build_ext = None
 else:
-    src = sources = ["feature.pyx"]
+    src = [i + ".pyx" for i in cython_src]
     from Cython.Distutils.extension import Extension
     from Cython.Distutils import build_ext
 
 feature_ext = Extension(name="feature",
 
-                    sources=src + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp"),
+                    sources=src + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp") + ["crc64.cpp", "crc32.cpp"],
                     include_dirs=get_numpy_include_dirs(),
                     language="c++",
-#                    libraries=["stdc++"],
                     extra_compile_args=['-fopenmp'],
                     extra_link_args=['-fopenmp'],
                     )
 
 
 setup(name='feature',
-      version="0.0.1",
-      author="Jerome Kieffer",
+      version="0.5.0",
+      author="Jérôme Kieffer",
       author_email="jerome.kieffer@esrf.eu",
       description='test for feature extraction algorithm like sift, surf, ...',
       ext_modules=[feature_ext],

@@ -1,12 +1,12 @@
-// Authors: Unknown. Please, if you are the author of this file, or if you 
-// know who are the authors of this file, let us know, so we can give the 
+// Authors: Unknown. Please, if you are the author of this file, or if you
+// know who are the authors of this file, let us know, so we can give the
 // adequate credits and/or get the adequate authorizations.
 
-// WARNING: 
+// WARNING:
 // This file implements an algorithm possibly linked to the patent
 //
-// David Lowe  "Method and apparatus for identifying scale invariant 
-// features in an image and use of same for locating an object in an 
+// David Lowe  "Method and apparatus for identifying scale invariant
+// features in an image and use of same for locating an object in an
 // image",  U.S. Patent 6,711,293.
 //
 // This file is made available for the exclusive aim of serving as
@@ -47,7 +47,7 @@
 
 
 /// For each keypoint
-///	 - Create vector 
+///	 - Create vector
 
 
 
@@ -159,7 +159,7 @@ int order;
    values determined experimentally are in the range 1.2 to 1.8.
 */
 float  InitSigma /*= 1.6*/;
- 
+
 
 /* Peaks in the DOG function must be at least BorderDist samples away
    from the image border, at whatever sampling is used for that scale.
@@ -190,7 +190,7 @@ int Scales /*= 3*/;
    regions.
 */
 
-//#define  PeakThreshInit  255*0.04 
+//#define  PeakThreshInit  255*0.04
 //#define  PeakThresh      PeakThreshInit / Scales
 float PeakThresh  /*255.0 * 0.04 / 3.0*/;
 
@@ -279,7 +279,7 @@ int noncorrectlylocalized;
 };
 
 //////////////////////////////////////////////////////////
-/// SIFT 
+/// SIFT
 //////////////////////////////////////////////////////////
 
 void default_sift_parameters(siftPar &par);
