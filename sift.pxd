@@ -2,16 +2,9 @@ from libcpp cimport bool
 from libcpp.pair  cimport pair
 from libcpp.vector cimport vector
 
-cdef extern from "sift/flimage.h":
-    cdef cppclass flimage:
-        flimage()
-        flimage(int w, int h)
-        flimage(int w, int h, float v)
-        flimage(int w, int h, float * v)
-        int nwidth() nogil
-        int nheight() nogil
+from image cimport flimage
 
-cdef extern from "sift/demo_lib_sift.h":
+cdef extern from "sift/sift.h":
     struct keypoint:
         float   x
         float   y

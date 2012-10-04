@@ -2,7 +2,7 @@
 
 from libcpp.vector cimport vector
 
-cdef extern from "libMatch/match.h":
+cdef extern from "orsa/match.h":
     struct Match:
         float x1, y1, x2, y2
 

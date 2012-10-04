@@ -1,11 +1,11 @@
 // Copyright (c) 2008-2011, Guoshen Yu <yu@cmap.polytechnique.fr>
 // Copyright (c) 2008-2011, Jean-Michel Morel <morel@cmla.ens-cachan.fr>
 //
-// WARNING: 
+// WARNING:
 // This file implements an algorithm possibly linked to the patent
 //
-// Jean-Michel Morel and Guoshen Yu, Method and device for the invariant 
-// affine recognition recognition of shapes (WO/2009/150361), patent pending. 
+// Jean-Michel Morel and Guoshen Yu, Method and device for the invariant
+// affine recognition recognition of shapes (WO/2009/150361), patent pending.
 //
 // This file is made available for the exclusive aim of serving as
 // scientific tool to verify of the soundness and
@@ -27,20 +27,20 @@
 // source or executable form. A license must be obtained from the
 // patent right holders for any other use.
 //
-// 
+//
 //*------------------------ compute_asift_matches-- -------------------------*/
-// Match the ASIFT keypoints. 
-// 
+// Match the ASIFT keypoints.
+//
 // Please report bugs and/or send comments to Guoshen Yu yu@cmap.polytechnique.fr
-// 
-// Reference: J.M. Morel and G.Yu, ASIFT: A New Framework for Fully Affine Invariant Image 
-//            Comparison, SIAM Journal on Imaging Sciences, vol. 2, issue 2, pp. 438-469, 2009. 
-// Reference: ASIFT online demo (You can try ASIFT with your own images online.) 
+//
+// Reference: J.M. Morel and G.Yu, ASIFT: A New Framework for Fully Affine Invariant Image
+//            Comparison, SIAM Journal on Imaging Sciences, vol. 2, issue 2, pp. 438-469, 2009.
+// Reference: ASIFT online demo (You can try ASIFT with your own images online.)
 //			  http://www.ipol.im/pub/algo/my_affine_sift/
 /*---------------------------------------------------------------------------*/
 
 #include "../sift/library.h"
-#include "../sift/demo_lib_sift.h"
+#include "../sift/sift.h"
 #include "../sift/frot.h"
 #include "../sift/fproj.h"
 #include <vector>

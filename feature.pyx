@@ -30,7 +30,7 @@ __copyright__ = "2011-2012, ESRF"
 __contact__ = "jerome.kieffer@esrf.fr"
 __doc__ = "this is a cython wrapper for feature extraction algorithm"
 
-import cython, time
+import cython, time, threading, multiprocessing
 from cython.operator cimport dereference as deref
 from cython.parallel cimport prange
 import numpy
@@ -40,9 +40,9 @@ from libcpp.pair  cimport pair
 from libcpp.vector cimport vector
 from libcpp.map cimport map
 from libc.stdint cimport uint64_t, uint32_t
-#from rlock cimport FastRLock
+from rlock import FastRLock
 from surf cimport  image, keyPoint, descriptor, listDescriptor, getKeyPoints, listKeyPoints, listMatch, octave, interval, matchDescriptor, get_points
-from sift cimport  keypoint, keypointslist, default_sift_parameters, compute_sift_keypoints, siftPar, matchingslist, flimage, compute_sift_matches, compute_sift_keypoints_flimage
+from sift cimport  keypoint, keypointslist, default_sift_parameters, compute_sift_keypoints, siftPar, matchingslist, compute_sift_matches, compute_sift_keypoints_flimage, flimage
 from asift cimport compute_asift_matches, compute_asift_keypoints
 from orsa cimport Match, MatchList, orsa
 from crc32 cimport crc32
@@ -60,11 +60,12 @@ def normalize_image(numpy.ndarray img not None):
 cdef class SiftAlignment:
     cdef siftPar sift_parameters
     cdef map[uint32_t, keypointslist] dictKeyPointsList
-#    cdef FastRLock lock
+    cdef FastRLock lock
+
     def __cinit__(self):
         default_sift_parameters(self.sift_parameters)
         self.dictKeyPointsList = map[uint32_t, keypointslist]()
-#        self.lock = FastRLock()
+        self.lock = FastRLock()
     def __dealloc__(self):
         self.dictKeyPointsList.empty()
 
