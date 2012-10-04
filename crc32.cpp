@@ -1,7 +1,8 @@
-#include <cpuid.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <smmintrin.h>
+#include <cpuid.h>
 
+bool initialized(false);
 uint32_t slowcrc_table[1<<8];
 
 void slowcrc_init() {
@@ -17,6 +18,7 @@ void slowcrc_init() {
 		}
 		slowcrc_table[i]=a;
 	}
+	initialized=true;
 }
 
 uint32_t slowcrc(char *str, uint32_t len) {
@@ -29,28 +31,22 @@ uint32_t slowcrc(char *str, uint32_t len) {
 	return ~lcrc;
 }
 
-uint32_t fastcrc(char *str, uint32_t len) {
-	uint32_t q=len/sizeof(uint32_t),
-		r=len%sizeof(uint32_t),
-		*p=(uint32_t*)str, crc;
+uint32_t fastcrc(const char *str, uint32_t len) {
+	uint64_t q=len/sizeof(uint64_t),
+		     r=len%sizeof(uint64_t),
+		     *p=(uint64_t*)str,
+		     crc64=0;
+	uint32_t crc=0;
 
-	crc=0;
 	while (q--) {
-		__asm__ __volatile__(
-			".byte 0xf2, 0xf, 0x38, 0xf1, 0xf1;"
-			:"=S"(crc)
-			:"0"(crc), "c"(*p)
-		);
+		crc64 = _mm_crc32_u64(crc64,*p);
 		p++;
 	}
 
 	str=(char*)p;
+	crc=crc64;
 	while (r--) {
-		__asm__ __volatile__(
-			".byte 0xf2, 0xf, 0x38, 0xf0, 0xf1"
-			:"=S"(crc)
-			:"0"(crc), "c"(*str)
-		);
+		crc = _mm_crc32_u8(crc,*str);
 		str++;
 	}
 
@@ -58,15 +54,15 @@ uint32_t fastcrc(char *str, uint32_t len) {
 }
 
 uint32_t crc32(char *str, uint32_t len) {
-  unsigned int eax, ebx, ecx, edx;
-
+  uint32_t eax, ebx, ecx, edx;
   __get_cpuid(1, &eax, &ebx, &ecx, &edx);
 
   if (ecx & bit_SSE4_2){
-	  printf ("SSE4.2 is supported\n");
-	  return fastcrc(str,len);
+	    return fastcrc(str,len);
   	 }else{
-  		slowcrc_init();
-  		return slowcrc(str,len);
+  		 if (!initialized){
+  			slowcrc_init();
+  		 }
+  		 return slowcrc(str,len);
   	 }
 }
