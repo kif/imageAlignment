@@ -33,7 +33,7 @@ from distutils.core import setup
 import glob
 from numpy.distutils.misc_util import get_numpy_include_dirs
 
-cython_src = ["feature"]#, "rlock"]
+cython_src = ["feature"]
 
 if sys.version_info < (2, 6):
     src = [i + ".cpp" for i in cython_src]
@@ -52,8 +52,9 @@ feature_ext = Extension(name="feature",
                     extra_link_args=['-fopenmp'],
                     )
 
-rlock_ext = Extension(name="rlock",
-                      sources=["rlock.pyx"]
+rlock_ext = Extension(name="cythreading",
+                      sources=["cythreading.pyx"],
+                      language="c++",
                       )
 
 setup(name='feature',
@@ -61,6 +62,6 @@ setup(name='feature',
       author="Jérôme Kieffer",
       author_email="jerome.kieffer@esrf.eu",
       description='test for feature extraction algorithm like sift, surf, ...',
-      ext_modules=[feature_ext, rlock_ext],
+      ext_modules=[feature_ext ],
       cmdclass={'build_ext': build_ext}
       )

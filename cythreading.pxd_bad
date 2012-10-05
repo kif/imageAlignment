@@ -1,0 +1,8 @@
+
+cdef class FastRLock:
+	pass
+cdef class Condition:
+	pass
+cdef class Semaphore:
+	pass
+	
