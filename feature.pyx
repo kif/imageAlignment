@@ -25,7 +25,7 @@
 
 __author__ = "Jerome Kieffer"
 __license__ = "GPLv3"
-__date__ = "03/10/2012"
+__date__ = "30/11/2012"
 __copyright__ = "2011-2012, ESRF"
 __contact__ = "jerome.kieffer@esrf.fr"
 __doc__ = "this is a cython wrapper for feature extraction algorithm"
@@ -33,6 +33,7 @@ __doc__ = "this is a cython wrapper for feature extraction algorithm"
 import cython, time, threading, multiprocessing
 from cython.operator cimport dereference as deref
 from cython.parallel cimport prange
+from cpython.object cimport PyObject
 import numpy
 cimport numpy
 from libcpp cimport bool
@@ -41,7 +42,7 @@ from libcpp.vector cimport vector
 from libcpp.map cimport map
 from libcpp.list cimport list
 from libc.stdint cimport uint64_t, uint32_t
-#cimport cythreading
+from threading import Semaphore
 from surf cimport  image, keyPoint, descriptor, listDescriptor, getKeyPoints, listKeyPoints, listMatch, octave, interval, matchDescriptor, get_points
 from sift cimport  keypoint, keypointslist, default_sift_parameters, compute_sift_keypoints, siftPar, matchingslist, compute_sift_matches, compute_sift_keypoints_flimage, flimage
 from asift cimport compute_asift_matches, compute_asift_keypoints
@@ -62,7 +63,7 @@ cdef class SiftAlignment:
     cdef siftPar sift_parameters
     cdef map[uint32_t, keypointslist] dictKeyPointsList
     cdef FastRLock lock
-    cdef Semaphore sem
+    cdef object sem
 #    cdef list[uint32_t] processing
 
     def __cinit__(self):
@@ -94,7 +95,6 @@ cdef class SiftAlignment:
         cdef float[:, :] data = normalize_image(img)
         cdef keypointslist kp
         cdef uint32_t idx = crc32(< char *> & data[0, 0], img.size * sizeof(float))
-        cdef uint32_t i
         cdef bool found=False
         with self.sem:
             with nogil:
@@ -104,13 +104,24 @@ cdef class SiftAlignment:
         return idx
 
     @cython.boundscheck(False)
-    def match(self, uint32_t idx1, uint32_t idx2):
+    def match(self, data1, data2):
         """
         calculate the matching between two images already analyzed.
 
         @param idx1, idx2: indexes of the images in the stored
         @return:   n x 4 numpy ndarray with [y1,x1,y2,x2] control points.
         """
+        cdef uint32_t idx1, idx2 
+        if type(data1) == numpy.ndarray:
+            idx1 = self.sift(data1)
+        else:
+            idx1 = data1
+            
+        if type(data2) == numpy.ndarray:
+            idx2 = self.sift(data2)
+        else:
+            idx2 = data2       
+        
         cdef size_t i, max_size = self.dictKeyPointsList.size()
 #        if idx1 > max_size or idx2 > max_size:
 #            raise IndexError("Currently %i images have been processed and you requested image %i and %i" % (max_size, idx1, idx2))
@@ -663,137 +674,137 @@ cdef inline void unlock_lock(FastRLock lock) nogil:
             pythread.PyThread_release_lock(lock._real_lock)
             lock._is_locked = False
 
-cdef class Condition:
-    cdef FastRLock _lock
-    cdef list[FastRLock] _waiters
-    def __cinit__(self, lock=None):
-        if lock is None:
-            lock = FastRLock()
-        self._lock = lock
-        self._waiters = list[FastRLock]()
-    
-    def __dealloc__(self):
-        self._waiters.empty()
-        
-    def acquire(self, bint blocking=True):
-        self._lock.acquire(blocking)
-        
-    def release(self):
-        self._lock.release()
-
-    def __enter__(self):
-        return self._lock.__enter__()
-
-    def __exit__(self, *args):
-        return self._lock.__exit__(*args)
-
-    def __repr__(self):
-        return "<Condition(%s, %d)>" % (self._lock, self._waiters.size())
-
-    def _release_save(self):
-        return self._lock.release()           # No state to save
-
-    def _acquire_restore(self, x):
-        return self._lock.acquire()           # Ignore saved state
-
-    def _is_owned(self):
-        return self._lock._is_owned()
-
-    def wait(self, timeout=None):
-        
-        cdef double delay,endtime,remaining,ctimeout
-        if timeout is None:
-            ctimeout = 0
-        else:
-            ctimeout = <double>timeout
-        if not self._is_owned():
-            raise RuntimeError("cannot wait on un-acquired lock")
-        cdef FastRLock waiter = FastRLock()
-        waiter.acquire()
-        self._waiters.push_back(waiter)
-        saved_state = self._release_save()
-        try:    # restore state no matter what (e.g., KeyboardInterrupt)
-            if ctimeout == 0:
-                waiter.acquire()
-            else:
-                # Balancing act:  We can't afford a pure busy loop, so we
-                # have to sleep; but if we sleep the whole timeout time,
-                # we'll be unresponsive.  The scheme here sleeps very
-                # little at first, longer as time goes on, but never longer
-                # than 20 times per second (or the timeout time remaining).
-                endtime = _time() + ctimeout
-                delay = 0.0005 # 500 us -> initial delay of 1 ms
-                while True:
-                    gotit = waiter.acquire(0)
-                    if gotit:
-                        break
-                    remaining = endtime - _time()
-                    if remaining <= 0:
-                        break
-                    delay = min(delay * 2., remaining, .05)
-                    _sleep(delay)
-                if not gotit:
-                    print("%s.wait(%s): timed out", self, ctimeout)
-                    try:
-                        self._waiters.remove(waiter)
-                    except ValueError:
-                        pass
-        finally:
-            self._acquire_restore(saved_state)
-            
-    def notify(self, n=1):
-        if not self._is_owned():
-            raise RuntimeError("cannot notify on un-acquired lock")
-        self._waiters
-        if self.waiters.size()==0:
-            return
-        for i in range(self.waiters.size()):
-            if i>=n:
-                break
-            waiter=self.waiters[i]
-            waiter.release()
-            try:
-                self.waiters.remove(waiter)
-            except ValueError:
-                pass
-
-    def notify_all(self):
-        self.notify(self._waiters.size())
-
-    notifyAll = notify_all
-
-          
-cdef class Semaphore:
-    cdef int _value
-    cdef Condition _cond
-    def __cinit__(self, int value=1):
-        if value < 0:
-            raise ValueError("semaphore initial value must be >= 0")
-        self._cond = Condition(FastRLock())
-        self._value = value
-
-    def acquire(self, blocking=True):
-        rc = False
-        self._cond.acquire()
-        while self._value == 0:
-            if not blocking:
-                break
-            self._cond.wait()
-        else:
-            self._value = self._value - 1
-            rc = True
-        self._cond.release()
-        return rc
-
-    __enter__ = acquire
-
-    def release(self):
-        self._cond.acquire()
-        self._value = self._value + 1
-        self._cond.notify()
-        self._cond.release()
-
-    def __exit__(self, t, v, tb):
-        self.release()
-
+#cdef class Condition:
+#    cdef FastRLock _lock
+#    cdef list[FastRLock] _waiters
+#    def __cinit__(self, lock=None):
+#        if lock is None:
+#            lock = FastRLock()
+#        self._lock = lock
+#        self._waiters = list[FastRLock]()
+#    
+#    def __dealloc__(self):
+#        self._waiters.empty()
+#        
+#    def acquire(self, bint blocking=True):
+#        self._lock.acquire(blocking)
+#        
+#    def release(self):
+#        self._lock.release()
+#
+#    def __enter__(self):
+#        return self._lock.__enter__()
+#
+#    def __exit__(self, *args):
+#        return self._lock.__exit__(*args)
+#
+#    def __repr__(self):
+#        return "<Condition(%s, %d)>" % (self._lock, self._waiters.size())
+#
+#    def _release_save(self):
+#        return self._lock.release()           # No state to save
+#
+#    def _acquire_restore(self, x):
+#        return self._lock.acquire()           # Ignore saved state
+#
+#    def _is_owned(self):
+#        return self._lock._is_owned()
+#
+#    def wait(self, timeout=None):
+#        
+#        cdef double delay,endtime,remaining,ctimeout
+#        if timeout is None:
+#            ctimeout = 0
+#        else:
+#            ctimeout = <double>timeout
+#        if not self._is_owned():
+#            raise RuntimeError("cannot wait on un-acquired lock")
+#        cdef FastRLock waiter = FastRLock()
+#        waiter.acquire()
+#        self._waiters.push_back(waiter)
+#        saved_state = self._release_save()
+#        try:    # restore state no matter what (e.g., KeyboardInterrupt)
+#            if ctimeout == 0:
+#                waiter.acquire()
+#            else:
+#                # Balancing act:  We can't afford a pure busy loop, so we
+#                # have to sleep; but if we sleep the whole timeout time,
+#                # we'll be unresponsive.  The scheme here sleeps very
+#                # little at first, longer as time goes on, but never longer
+#                # than 20 times per second (or the timeout time remaining).
+#                endtime = _time() + ctimeout
+#                delay = 0.0005 # 500 us -> initial delay of 1 ms
+#                while True:
+#                    gotit = waiter.acquire(0)
+#                    if gotit:
+#                        break
+#                    remaining = endtime - _time()
+#                    if remaining <= 0:
+#                        break
+#                    delay = min(delay * 2., remaining, .05)
+#                    _sleep(delay)
+#                if not gotit:
+#                    print("%s.wait(%s): timed out", self, ctimeout)
+#                    try:
+#                        self._waiters.remove(waiter)
+#                    except ValueError:
+#                        pass
+#        finally:
+#            self._acquire_restore(saved_state)
+#            
+#    def notify(self, n=1):
+#        if not self._is_owned():
+#            raise RuntimeError("cannot notify on un-acquired lock")
+#        self._waiters
+#        if self.waiters.size()==0:
+#            return
+#        for i in range(self.waiters.size()):
+#            if i>=n:
+#                break
+#            waiter=self.waiters[i]
+#            waiter.release()
+#            try:
+#                self.waiters.remove(waiter)
+#            except ValueError:
+#                pass
+#
+#    def notify_all(self):
+#        self.notify(self._waiters.size())
+#
+#    notifyAll = notify_all
+#
+#          
+#cdef class Semaphore:
+#    cdef int _value
+#    cdef Condition _cond
+#    def __cinit__(self, int value=1):
+#        if value < 0:
+#            raise ValueError("semaphore initial value must be >= 0")
+#        self._cond = Condition(FastRLock())
+#        self._value = value
+#
+#    def acquire(self, blocking=True):
+#        rc = False
+#        self._cond.acquire()
+#        while self._value == 0:
+#            if not blocking:
+#                break
+#            self._cond.wait()
+#        else:
+#            self._value = self._value - 1
+#            rc = True
+#        self._cond.release()
+#        return rc
+#
+#    __enter__ = acquire
+#
+#    def release(self):
+#        self._cond.acquire()
+#        self._value = self._value + 1
+#        self._cond.notify()
+#        self._cond.release()
+#
+#    def __exit__(self, t, v, tb):
+#        self.release()
+#
 
