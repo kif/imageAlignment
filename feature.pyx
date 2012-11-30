@@ -96,6 +96,8 @@ cdef class SiftAlignment:
         cdef keypointslist kp
         cdef uint32_t idx = crc32(< char *> & data[0, 0], img.size * sizeof(float))
         cdef bool found=False
+        if (self.dictKeyPointsList.find(idx)!=self.dictKeyPointsList.end()):
+            return idx
         with self.sem:
             with nogil:
                 compute_sift_keypoints(< float *> & data[0, 0], kp, data.shape[1], data.shape[0], self.sift_parameters)
