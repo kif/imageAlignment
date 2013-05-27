@@ -25,7 +25,7 @@
 
 __author__ = "Jerome Kieffer"
 __license__ = "GPLv3"
-__date__ = "30/11/2012"
+__date__ = "27/05/2013"
 __copyright__ = "2011-2012, ESRF"
 __contact__ = "jerome.kieffer@esrf.fr"
 __doc__ = "this is a cython wrapper for feature extraction algorithm"
@@ -59,6 +59,45 @@ def normalize_image(numpy.ndarray img not None):
     mini = numpy.float32(img.min())
     return numpy.ascontiguousarray(numpy.float32(255) * (img - mini) / (maxi - mini), dtype=numpy.float32)
 
+cdef numpy.ndarray[numpy.float32_t, ndim = 2] keypoints2array(keypointslist kpl):
+    """
+    Function that converts a keypoint list (n keypoints) into a numpy array of shape = (n, 132) 
+    Each keypoint is composed of x, y, scale and angle and a vector containing 4*4*8 = 128 floats   
+    """
+    cdef int i,j, n = kpl.size()
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((n, 132), dtype=numpy.float32)
+    cdef keypoint kp 
+    for i in range(n):
+        kp = kpl[i]
+        out[i,0] = kp.x
+        out[i,1] = kp.y
+        out[i,2] = kp.scale
+        out[i,3] = kp.angle
+        for j in range(128):
+            out[i,4+j] = kp.vec[j] 
+    return out
+
+cdef keypointslist array2keypoints(numpy.ndarray[numpy.float32_t, ndim = 2] ary):
+    """
+    Function that converts a numpy array into keypoint list.
+    The numpy array must have a second dimension equal to 132 !!!  
+    Each keypoint is composed of x, y, scale and angle and a vector containing 4*4*8 = 128 floats   
+    """
+    assert ary.shape[1] == 132
+    cdef int i, j, n = ary.shape[0]
+    cdef keypoint kp
+    cdef keypointslist kpl # = new keypointslist()
+    for i in range(n):
+        kp.x = ary[i,0] 
+        kp.y = ary[i,1] 
+        kp.scale = ary[i,2] 
+        kp.angle = ary[i,3] 
+        for j in range(128):
+            kp.vec[j] = ary[i,4+j]
+        kpl.push_back(kp)  
+    return kpl
+
+    
 cdef class SiftAlignment:
     cdef siftPar sift_parameters
     cdef map[uint32_t, keypointslist] dictKeyPointsList
@@ -85,7 +124,7 @@ cdef class SiftAlignment:
 #            self.processing.empty()
 
     @cython.boundscheck(False)
-    def sift(self, numpy.ndarray img not None):
+    cdef keypointslist sift_c(self, numpy.ndarray img):
         """
         Calculate the SIFT descriptor for an image and stores it.
 
@@ -97,13 +136,24 @@ cdef class SiftAlignment:
         cdef uint32_t idx = crc32(< char *> & data[0, 0], img.size * sizeof(float))
         cdef bool found=False
         if (self.dictKeyPointsList.find(idx)!=self.dictKeyPointsList.end()):
-            return idx
+            return self.dictKeyPointsList[idx]
         with self.sem:
             with nogil:
                 compute_sift_keypoints(< float *> & data[0, 0], kp, data.shape[1], data.shape[0], self.sift_parameters)
         with self.lock:
             self.dictKeyPointsList[idx] = kp
-        return idx
+        return kp
+
+    @cython.boundscheck(False)
+    def sift(self, numpy.ndarray img not None):
+        """
+        Calculate the SIFT descriptor for an image and stores it.
+
+        @param img: 2D numpy array representing the image
+        @return: list keypoints as a numpy array
+        """
+        return keypoints2array(self.sift_c(img))
+
 
     @cython.boundscheck(False)
     def match(self, data1, data2):
@@ -113,25 +163,18 @@ cdef class SiftAlignment:
         @param idx1, idx2: indexes of the images in the stored
         @return:   n x 4 numpy ndarray with [y1,x1,y2,x2] control points.
         """
-        cdef uint32_t idx1, idx2 
-        if type(data1) == numpy.ndarray:
-            idx1 = self.sift(data1)
-        else:
-            idx1 = data1
-            
-        if type(data2) == numpy.ndarray:
-            idx2 = self.sift(data2)
-        else:
-            idx2 = data2       
-        
-        cdef size_t i, max_size = self.dictKeyPointsList.size()
-#        if idx1 > max_size or idx2 > max_size:
-#            raise IndexError("Currently %i images have been processed and you requested image %i and %i" % (max_size, idx1, idx2))
         cdef keypointslist kp1 , kp2
-        with self.lock:
-            kp2 = self.dictKeyPointsList[idx2]
-            kp1 = self.dictKeyPointsList[idx1]
         cdef matchingslist matchings
+        if type(data1) == numpy.ndarray and data1.ndim == 2:
+            if data1.shape[1] == 132:
+                kp1 =  array2keypoints(data1)
+            else:
+                kp1 = self.sift_c(data1)
+        if type(data2) == numpy.ndarray and data1.ndim == 2:
+            if data2.shape[1] == 132:
+                kp2 =  array2keypoints(data2)
+            else:
+                kp2 = self.sift_c(data2)
         with nogil:
             compute_sift_matches(kp1, kp2, matchings, self.sift_parameters);
         cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype=numpy.float32)
