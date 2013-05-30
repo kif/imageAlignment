@@ -43,4 +43,5 @@ cdef extern from "sift/sift.h":
     #typedef std::vector<matching> matchingslist;
     ctypedef  vector[ matching ] matchingslist
     void compute_sift_matches(keypointslist keys1, keypointslist keys2, matchingslist matchings, siftPar par) nogil
-
+    void imgblur(float *, float* , int , int , float)
+	

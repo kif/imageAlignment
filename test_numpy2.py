@@ -7,8 +7,9 @@ import scipy
 import feature
 
 l = scipy.misc.lena().astype(numpy.float32)
-l1 = l[5:, 6:]
-l2 = l[:-5, :-6]
+#l1 = l[5:, 6:]
+#l2 = l[:-5, :-6]
+l1=l2=l
 fig = pylab.figure()
 sp1 = fig.add_subplot(1, 2, 1)
 sp2 = fig.add_subplot(1, 2, 2)
@@ -16,6 +17,7 @@ sp1.imshow(l1, interpolation="nearest", cmap="gray")
 sp2.imshow(l2, interpolation="nearest", cmap="gray")
 siftalignement = feature.SiftAlignment()
 kp1 = siftalignement.sift(l1)
+print("")
 kp2 = siftalignement.sift(l2)
 print kp1[:, :4], kp2[:, :4]
 print kp1.shape[0], kp2.shape[0]

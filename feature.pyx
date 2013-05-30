@@ -31,6 +31,8 @@ __contact__ = "jerome.kieffer@esrf.fr"
 __doc__ = "this is a cython wrapper for feature extraction algorithm"
 
 import cython, time, threading, multiprocessing
+from libc.string cimport memcpy
+from libc.stdlib cimport free 
 from cython.operator cimport dereference as deref
 from cython.parallel cimport prange
 from cpython.object cimport PyObject
@@ -44,7 +46,7 @@ from libcpp.list cimport list
 from libc.stdint cimport uint64_t, uint32_t
 from threading import Semaphore
 from surf cimport  image, keyPoint, descriptor, listDescriptor, getKeyPoints, listKeyPoints, listMatch, octave, interval, matchDescriptor, get_points
-from sift cimport  keypoint, keypointslist, default_sift_parameters, compute_sift_keypoints, siftPar, matchingslist, compute_sift_matches, compute_sift_keypoints_flimage, flimage
+from sift cimport  keypoint, keypointslist, default_sift_parameters, compute_sift_keypoints, siftPar, matchingslist, compute_sift_matches, compute_sift_keypoints_flimage, flimage, imgblur
 from asift cimport compute_asift_matches, compute_asift_keypoints
 from orsa cimport Match, MatchList, orsa
 from crc32 cimport crc32
@@ -127,6 +129,7 @@ cdef class SiftAlignment:
     cdef keypointslist sift_c(self, numpy.ndarray img):
         """
         Calculate the SIFT descriptor for an image and stores it.
+        Cython only version
 
         @param img: 2D numpy array representing the image
         @return: index of keypoints in the list
@@ -134,12 +137,13 @@ cdef class SiftAlignment:
         cdef float[:, :] data = normalize_image(img)
         cdef keypointslist kp
         cdef uint32_t idx = crc32(< char *> & data[0, 0], img.size * sizeof(float))
-        cdef bool found=False
         if (self.dictKeyPointsList.find(idx)!=self.dictKeyPointsList.end()):
             return self.dictKeyPointsList[idx]
         with self.sem:
+            t0 = time.time()
             with nogil:
                 compute_sift_keypoints(< float *> & data[0, 0], kp, data.shape[1], data.shape[0], self.sift_parameters)
+            print("SIFT on image %4ix%4i took %.3fms"%(img.shape[1],img.shape[0],1000.0*(time.time()-t0)))
         with self.lock:
             self.dictKeyPointsList[idx] = kp
         return kp
@@ -147,7 +151,7 @@ cdef class SiftAlignment:
     @cython.boundscheck(False)
     def sift(self, numpy.ndarray img not None):
         """
-        Calculate the SIFT descriptor for an image and stores it.
+        Calculate the SIFT descriptor for an image. Python version
 
         @param img: 2D numpy array representing the image
         @return: list keypoints as a numpy array
@@ -255,7 +259,8 @@ def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=
         out[i, 2] = matchings[i].second.y
         out[i, 3] = matchings[i].second.x
     return out
-
+    
+    
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -719,137 +724,11 @@ cdef inline void unlock_lock(FastRLock lock) nogil:
             pythread.PyThread_release_lock(lock._real_lock)
             lock._is_locked = False
 
-#cdef class Condition:
-#    cdef FastRLock _lock
-#    cdef list[FastRLock] _waiters
-#    def __cinit__(self, lock=None):
-#        if lock is None:
-#            lock = FastRLock()
-#        self._lock = lock
-#        self._waiters = list[FastRLock]()
-#    
-#    def __dealloc__(self):
-#        self._waiters.empty()
-#        
-#    def acquire(self, bint blocking=True):
-#        self._lock.acquire(blocking)
-#        
-#    def release(self):
-#        self._lock.release()
-#
-#    def __enter__(self):
-#        return self._lock.__enter__()
-#
-#    def __exit__(self, *args):
-#        return self._lock.__exit__(*args)
-#
-#    def __repr__(self):
-#        return "<Condition(%s, %d)>" % (self._lock, self._waiters.size())
-#
-#    def _release_save(self):
-#        return self._lock.release()           # No state to save
-#
-#    def _acquire_restore(self, x):
-#        return self._lock.acquire()           # Ignore saved state
-#
-#    def _is_owned(self):
-#        return self._lock._is_owned()
-#
-#    def wait(self, timeout=None):
-#        
-#        cdef double delay,endtime,remaining,ctimeout
-#        if timeout is None:
-#            ctimeout = 0
-#        else:
-#            ctimeout = <double>timeout
-#        if not self._is_owned():
-#            raise RuntimeError("cannot wait on un-acquired lock")
-#        cdef FastRLock waiter = FastRLock()
-#        waiter.acquire()
-#        self._waiters.push_back(waiter)
-#        saved_state = self._release_save()
-#        try:    # restore state no matter what (e.g., KeyboardInterrupt)
-#            if ctimeout == 0:
-#                waiter.acquire()
-#            else:
-#                # Balancing act:  We can't afford a pure busy loop, so we
-#                # have to sleep; but if we sleep the whole timeout time,
-#                # we'll be unresponsive.  The scheme here sleeps very
-#                # little at first, longer as time goes on, but never longer
-#                # than 20 times per second (or the timeout time remaining).
-#                endtime = _time() + ctimeout
-#                delay = 0.0005 # 500 us -> initial delay of 1 ms
-#                while True:
-#                    gotit = waiter.acquire(0)
-#                    if gotit:
-#                        break
-#                    remaining = endtime - _time()
-#                    if remaining <= 0:
-#                        break
-#                    delay = min(delay * 2., remaining, .05)
-#                    _sleep(delay)
-#                if not gotit:
-#                    print("%s.wait(%s): timed out", self, ctimeout)
-#                    try:
-#                        self._waiters.remove(waiter)
-#                    except ValueError:
-#                        pass
-#        finally:
-#            self._acquire_restore(saved_state)
-#            
-#    def notify(self, n=1):
-#        if not self._is_owned():
-#            raise RuntimeError("cannot notify on un-acquired lock")
-#        self._waiters
-#        if self.waiters.size()==0:
-#            return
-#        for i in range(self.waiters.size()):
-#            if i>=n:
-#                break
-#            waiter=self.waiters[i]
-#            waiter.release()
-#            try:
-#                self.waiters.remove(waiter)
-#            except ValueError:
-#                pass
-#
-#    def notify_all(self):
-#        self.notify(self._waiters.size())
-#
-#    notifyAll = notify_all
-#
-#          
-#cdef class Semaphore:
-#    cdef int _value
-#    cdef Condition _cond
-#    def __cinit__(self, int value=1):
-#        if value < 0:
-#            raise ValueError("semaphore initial value must be >= 0")
-#        self._cond = Condition(FastRLock())
-#        self._value = value
-#
-#    def acquire(self, blocking=True):
-#        rc = False
-#        self._cond.acquire()
-#        while self._value == 0:
-#            if not blocking:
-#                break
-#            self._cond.wait()
-#        else:
-#            self._value = self._value - 1
-#            rc = True
-#        self._cond.release()
-#        return rc
-#
-#    __enter__ = acquire
-#
-#    def release(self):
-#        self._cond.acquire()
-#        self._value = self._value + 1
-#        self._cond.notify()
-#        self._cond.release()
-#
-#    def __exit__(self, t, v, tb):
-#        self.release()
-#
+
+def fimgblur(numpy.ndarray inp not None, float sigma):
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] data = numpy.ascontiguousarray(inp,dtype="float32")
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] output = numpy.empty_like(data)
+    cdef int width = data.shape[1], height = data.shape[1]
+    imgblur(<float*> data.data,<float*> output.data, width, height, sigma)
+    return output
 

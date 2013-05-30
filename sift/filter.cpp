@@ -4,7 +4,7 @@
 
 #include "filter.h"
 
-
+#include <time.h>
 /////////////////////////////////////////////////////////////// Build Gaussian filters
 float * directional_gauss_filter(float xsigma, float ysigma, float angle, int *kwidth, int *kheight)
 {
@@ -253,17 +253,25 @@ void gaussian_convolution(float *u, float *v, int width, int height, float sigma
 	ksize = (int)(2.0 * 4.0 * sigma + 1.0);
 	kernel = gauss(1,sigma,&ksize);
 
+	printf("Convolving image with gaussian std: %f  size: %d on image %dx%d ", sigma, ksize, width,height);
+	clock_t start = clock(), diff;
+
 	int boundary = 1;
 
 	copy(u,v,width*height);
 	horizontal_convolution(v, v, width, height, kernel, ksize, boundary);
     vertical_convolution(v, v, width, height,  kernel,  ksize, boundary);
 	delete[] kernel; /*memcheck*/
+	printf("Time taken %d msec \n", (int)(( clock() - start) * 1000 / CLOCKS_PER_SEC));
+
 }
 
 
 void gaussian_convolution(float *u, float *v, int width, int height, float sigma, int ksize)
 {
+	printf("Convolving image with gaussian std: %f  size: %d on image %dx%d ", sigma, ksize, width,height);
+	clock_t start = clock(), diff;
+
 	float * kernel;
 	kernel = gauss(1,sigma,&ksize);
 
@@ -271,7 +279,12 @@ void gaussian_convolution(float *u, float *v, int width, int height, float sigma
 
 	copy(u,v,width*height);
 	horizontal_convolution(v, v, width, height, kernel, ksize, boundary);
-    	vertical_convolution(v, v, width, height,  kernel,  ksize, boundary);
+	vertical_convolution(v, v, width, height,  kernel,  ksize, boundary);
+
+//	delete[] kernel; /*memcheck*/
+	printf("Time taken %d msec \n", (int)(( clock() - start) * 1000 / CLOCKS_PER_SEC));
+
+
 }
 
 

@@ -145,6 +145,13 @@ void compute_sift_keypoints(float *input, keypointslist& keypoints, int width, i
 	compute_sift_keypoints_flimage(image, keypoints,par);
 }
 
+void imgblur(float *input, float* output, int width, int height, float sigma)
+{
+	gaussian_convolution( input, output, width, height, sigma);
+}
+
+
+
 void compute_sift_keypoints_flimage(flimage image, keypointslist& keypoints, siftPar &par){
 	float octSize = 1.0;
 	/// Apply initial smoothing to input image to raise its smoothing to par.InitSigma.
