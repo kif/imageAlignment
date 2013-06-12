@@ -379,6 +379,9 @@ void FindMaxMin(
 				}
 
 		}
+
+		printf("octSize %f scale %d keypoints %d\n",octSize,s,keys.size());
+
 	}
 
 }
