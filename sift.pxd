@@ -45,3 +45,6 @@ cdef extern from "sift/sift.h":
     void compute_sift_matches(keypointslist keys1, keypointslist keys2, matchingslist matchings, siftPar par) nogil
     void imgblur(float *, float* , int , int , float)
 	
+cdef extern from "sift/library.h":
+    void sample ( float *,float *, float ,int , int) nogil
+	

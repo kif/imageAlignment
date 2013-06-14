@@ -46,7 +46,7 @@ from libcpp.list cimport list
 from libc.stdint cimport uint64_t, uint32_t
 from threading import Semaphore
 from surf cimport  image, keyPoint, descriptor, listDescriptor, getKeyPoints, listKeyPoints, listMatch, octave, interval, matchDescriptor, get_points
-from sift cimport  keypoint, keypointslist, default_sift_parameters, compute_sift_keypoints, siftPar, matchingslist, compute_sift_matches, compute_sift_keypoints_flimage, flimage, imgblur
+from sift cimport  keypoint, keypointslist, default_sift_parameters, compute_sift_keypoints, siftPar, matchingslist, compute_sift_matches, compute_sift_keypoints_flimage, flimage, imgblur, sample
 from asift cimport compute_asift_matches, compute_asift_keypoints
 from orsa cimport Match, MatchList, orsa
 from crc32 cimport crc32
@@ -730,5 +730,11 @@ def fimgblur(numpy.ndarray inp not None, float sigma):
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] output = numpy.empty_like(data)
     cdef int width = data.shape[1], height = data.shape[1]
     imgblur(<float*> data.data,<float*> output.data, width, height, sigma)
+    return output
+def shrink(numpy.ndarray[numpy.float32_t, ndim = 2] img not None,float factor):
+    d0=img.shape[0]
+    d1 =img.shape[1] 
+    cdef numpy.ndarray[numpy.float32_t, ndim = 2] output = numpy.empty((int(d0/factor),int(d1/factor)),dtype=numpy.float32)
+    sample(<float*> & img[0,0],<float*> & output[0,0], factor, d1, d0)
     return output
 
