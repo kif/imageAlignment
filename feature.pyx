@@ -52,6 +52,18 @@ from orsa cimport Match, MatchList, orsa
 from crc32 cimport crc32
 from multiprocessing import cpu_count
 
+dtype_kp = numpy.dtype([('x', numpy.float32), 
+                        ('y', numpy.float32), 
+                        ('scale', numpy.float32), 
+                        ('angle', numpy.float32), 
+                        ('desc', (numpy.uint8, 128))
+                        ])
+
+#cdef packed struct dtype_kp_t:
+cdef packed struct dtype_kp_t:
+    numpy.float32_t   x, y, scale, angle
+    unsigned char     desc[128]
+
 def mycrc(float[:] data):
     return crc32(< char *> & data[0], data.size * sizeof(float))
 
@@ -61,41 +73,63 @@ def normalize_image(numpy.ndarray img not None):
     mini = numpy.float32(img.min())
     return numpy.ascontiguousarray(numpy.float32(255) * (img - mini) / (maxi - mini), dtype=numpy.float32)
 
-cdef numpy.ndarray[numpy.float32_t, ndim = 2] keypoints2array(keypointslist kpl):
+cdef keypoints2array(keypointslist kpl):
     """
     Function that converts a keypoint list (n keypoints) into a numpy array of shape = (n, 132) 
     Each keypoint is composed of x, y, scale and angle and a vector containing 4*4*8 = 128 floats   
     """
     cdef int i,j, n = kpl.size()
-    cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((n, 132), dtype=numpy.float32)
+#    cdef dtype_kp_t[:] out 
+#    cdef numpy.ndarray[dtype_kp_t, ndim=1] out
+    out = numpy.recarray(shape=(n,), dtype=dtype_kp) 
+    cdef float[:] out_x  = numpy.zeros(n, dtype=numpy.float32)
+    cdef float[:] out_y  = numpy.zeros(n, dtype=numpy.float32)
+    cdef float[:] out_scale = numpy.zeros(n, dtype=numpy.float32)
+    cdef float[:] out_angle  = numpy.zeros(n, dtype=numpy.float32)
+    cdef unsigned char[:,:] out_desc  = numpy.zeros((n,128), dtype=numpy.uint8)
+    #numpy.recarray(shape=(n,), dtype=dtype_kp)
+#    cdef dtype_kp_t nkp 
     cdef keypoint kp 
     for i in range(n):
         kp = kpl[i]
-        out[i,0] = kp.x
-        out[i,1] = kp.y
-        out[i,2] = kp.scale
-        out[i,3] = kp.angle
+        out_x[i] = kp.x
+        out_y[i] = kp.y
+        out_scale[i] = kp.scale
+        out_angle[i] = kp.angle
         for j in range(128):
-            out[i,4+j] = kp.vec[j] 
+            out_desc[i,j] = <unsigned char> (kp.vec[j])
+##        out[i] = nkp 
+    out[:].x = out_x
+    out[:].x = out_x
+    out[:].x = out_x
+    out[:].x = out_x
+    out[:].desc = out_desc
     return out
 
-cdef keypointslist array2keypoints(numpy.ndarray[numpy.float32_t, ndim = 2] ary):
+cdef keypointslist array2keypoints(numpy.ndarray ary):
     """
     Function that converts a numpy array into keypoint list.
     The numpy array must have a second dimension equal to 132 !!!  
     Each keypoint is composed of x, y, scale and angle and a vector containing 4*4*8 = 128 floats   
     """
-    assert ary.shape[1] == 132
-    cdef int i, j, n = ary.shape[0]
+    assert ary.ndim == 1
+    assert ary.dtype == dtype_kp
+    cdef int i, j, n = ary.size
     cdef keypoint kp
+    cdef dtype_kp_t nkp
     cdef keypointslist kpl # = new keypointslist()
+    cdef float[:] x = ary[:].x
+    cdef float[:] y = ary[:].y
+    cdef float[:] scale = ary[:].scale
+    cdef float[:] angle = ary[:].angle
+    cdef unsigned char[:,:] desc = ary[:].desc 
     for i in range(n):
-        kp.x = ary[i,0] 
-        kp.y = ary[i,1] 
-        kp.scale = ary[i,2] 
-        kp.angle = ary[i,3] 
+        kp.x = x[i] 
+        kp.y = y[i] 
+        kp.scale =  scale[i]
+        kp.angle = angle[i]  
         for j in range(128):
-            kp.vec[j] = ary[i,4+j]
+            kp.vec[j] = desc[i,j]
         kpl.push_back(kp)  
     return kpl
 
@@ -169,16 +203,12 @@ cdef class SiftAlignment:
         """
         cdef keypointslist kp1 , kp2
         cdef matchingslist matchings
-        if type(data1) == numpy.ndarray and data1.ndim == 2:
-            if data1.shape[1] == 132:
-                kp1 =  array2keypoints(data1)
-            else:
-                kp1 = self.sift_c(data1)
-        if type(data2) == numpy.ndarray and data1.ndim == 2:
-            if data2.shape[1] == 132:
-                kp2 =  array2keypoints(data2)
-            else:
-                kp2 = self.sift_c(data2)
+        if type(data1) == numpy.core.records.recarray and data1.ndim == 1:
+            kp1 =  array2keypoints(data1)
+            print kp1.size()
+        if type(data2) == numpy.core.records.recarray and data2.ndim == 1:
+            kp2 =  array2keypoints(data2)
+            print kp2.size()
         with nogil:
             compute_sift_matches(kp1, kp2, matchings, self.sift_parameters);
         cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype=numpy.float32)
