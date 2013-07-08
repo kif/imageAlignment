@@ -25,14 +25,14 @@
 
 __author__ = "Jerome Kieffer"
 __license__ = "GPLv3"
-__date__ = "27/05/2013"
+__date__ = "07/07/2013"
 __copyright__ = "2011-2012, ESRF"
 __contact__ = "jerome.kieffer@esrf.fr"
 __doc__ = "this is a cython wrapper for feature extraction algorithm"
 
 import cython, time, threading, multiprocessing
 from libc.string cimport memcpy
-from libc.stdlib cimport free 
+from libc.stdlib cimport free
 from cython.operator cimport dereference as deref
 from cython.parallel cimport prange
 from cpython.object cimport PyObject
@@ -52,10 +52,10 @@ from orsa cimport Match, MatchList, orsa
 from crc32 cimport crc32
 from multiprocessing import cpu_count
 
-dtype_kp = numpy.dtype([('x', numpy.float32), 
-                        ('y', numpy.float32), 
-                        ('scale', numpy.float32), 
-                        ('angle', numpy.float32), 
+dtype_kp = numpy.dtype([('x', numpy.float32),
+                        ('y', numpy.float32),
+                        ('scale', numpy.float32),
+                        ('angle', numpy.float32),
                         ('desc', (numpy.uint8, 128))
                         ])
 
@@ -64,10 +64,10 @@ cdef packed struct dtype_kp_t:
     numpy.float32_t   x, y, scale, angle
     unsigned char     desc[128]
 
-dtype_match = numpy.dtype([('x0', numpy.float32),('y0', numpy.float32),
-                           ('x1', numpy.float32),('y1', numpy.float32)])
+dtype_match = numpy.dtype([('x0', numpy.float32),('y0', numpy.float32),('scale0', numpy.float32),('angle0', numpy.float32)
+                           ('x1', numpy.float32),('y1', numpy.float32),('scale1', numpy.float32),('angle1', numpy.float32)])
 cdef packed struct dtype_match_t:
-    numpy.float32_t   x0, y0, x1, y1
+    numpy.float32_t   x0, y0, scale0, angle0, x1, y1, scale1, angle1
 
 def mycrc(float[:] data):
     return crc32(< char *> & data[0], data.size * sizeof(float))
@@ -78,23 +78,24 @@ def normalize_image(numpy.ndarray img not None):
     mini = numpy.float32(img.min())
     return numpy.ascontiguousarray(numpy.float32(255) * (img - mini) / (maxi - mini), dtype=numpy.float32)
 
+@cython.boundscheck(False)
 cdef keypoints2array(keypointslist kpl):
     """
-    Function that converts a keypoint list (n keypoints) into a numpy array of shape = (n, 132) 
-    Each keypoint is composed of x, y, scale and angle and a vector containing 4*4*8 = 128 floats   
+    Function that converts a keypoint list (n keypoints) into a numpy array of shape = (n, 132)
+    Each keypoint is composed of x, y, scale and angle and a vector containing 4*4*8 = 128 floats
     """
     cdef int i,j, n = kpl.size()
-#    cdef dtype_kp_t[:] out 
+#    cdef dtype_kp_t[:] out
 #    cdef numpy.ndarray[dtype_kp_t, ndim=1] out
-    out = numpy.recarray(shape=(n,), dtype=dtype_kp) 
+    out = numpy.recarray(shape=(n,), dtype=dtype_kp)
     cdef float[:] out_x  = numpy.zeros(n, dtype=numpy.float32)
     cdef float[:] out_y  = numpy.zeros(n, dtype=numpy.float32)
     cdef float[:] out_scale = numpy.zeros(n, dtype=numpy.float32)
     cdef float[:] out_angle  = numpy.zeros(n, dtype=numpy.float32)
     cdef unsigned char[:,:] out_desc  = numpy.zeros((n,128), dtype=numpy.uint8)
     #numpy.recarray(shape=(n,), dtype=dtype_kp)
-#    cdef dtype_kp_t nkp 
-    cdef keypoint kp 
+#    cdef dtype_kp_t nkp
+    cdef keypoint kp
     for i in range(n):
         kp = kpl[i]
         out_x[i] = kp.x
@@ -110,11 +111,12 @@ cdef keypoints2array(keypointslist kpl):
     out[:].desc = out_desc
     return out
 
+@cython.boundscheck(False)
 cdef keypointslist array2keypoints(numpy.ndarray ary):
     """
     Function that converts a numpy array into keypoint list.
-    The numpy array must have a second dimension equal to 132 !!!  
-    Each keypoint is composed of x, y, scale and angle and a vector containing 4*4*8 = 128 floats   
+    The numpy array must have a second dimension equal to 132 !!!
+    Each keypoint is composed of x, y, scale and angle and a vector containing 4*4*8 = 128 floats
     """
     assert ary.ndim == 1
     assert ary.dtype == dtype_kp
@@ -126,24 +128,25 @@ cdef keypointslist array2keypoints(numpy.ndarray ary):
     cdef float[:] y = ary[:].y
     cdef float[:] scale = ary[:].scale
     cdef float[:] angle = ary[:].angle
-    cdef unsigned char[:,:] desc = ary[:].desc 
+    cdef unsigned char[:,:] desc = ary[:].desc
     for i in range(n):
-        kp.x = x[i] 
-        kp.y = y[i] 
+        kp.x = x[i]
+        kp.y = y[i]
         kp.scale =  scale[i]
-        kp.angle = angle[i]  
+        kp.angle = angle[i]
         for j in range(128):
             kp.vec[j] = desc[i,j]
-        kpl.push_back(kp)  
+        kpl.push_back(kp)
     return kpl
 
-def sift_keypoints(numpy.ndarray img): 
+@cython.boundscheck(False)
+def sift_keypoints(numpy.ndarray img):
     """
-    Calculate all keypoints from an image 
-    
+    Calculate all keypoints from an image
+
     @param image: 2D numpy array
-    @return: 1D numpyarray of keypoints
-    """   
+    @return: 1D numpy record-array of keypoints
+    """
     assert img.ndim == 2
     cdef float[:, :] data = normalize_image(img)
     cdef keypointslist kp
@@ -157,13 +160,15 @@ def sift_keypoints(numpy.ndarray img):
 #    del sift_parameters
     return out
 
-def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2): 
+@cython.boundscheck(False)
+def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2):
     """
-    Calculate all keypoints from an image 
-    
-    @param image: 2D numpy array
-    @return: 1D numpyarray of keypoints
-    """   
+    Calculate all keypoints from an image
+
+    @param nkp1: 1D numpy record-array of keypoints
+    @param nkp2: 1D numpy record-array of keypoints
+    @return: 1D numpy record array of matching keypoints
+    """
     assert nkp1.ndim == 1
     assert nkp1.ndim == 1
     assert type(nkp1) == numpy.core.records.recarray
@@ -177,22 +182,25 @@ def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2):
     with nogil:
         default_sift_parameters(sift_parameters)
         compute_sift_matches(kp1, kp2, matchings, sift_parameters);
-    cdef numpy.ndarray[dtype_match_t, ndim = 1] out = numpy.recarray(shape=(matchings.size(), ), dtype=dtype_match)
+    cdef dtype_match_t[:] out = numpy.recarray(shape=(matchings.size(), ), dtype=dtype_match)
     for i in range(matchings.size()):
         out[i].x0 = matchings[i].first.x
         out[i].y0 = matchings[i].first.y
+        out[i].scale0 = matchings[i].first.scale
+        out[i].angle0 = matchings[i].first.angle
         out[i].x1 = matchings[i].second.x
         out[i].y1 = matchings[i].second.y
+        out[i].scale1 = matchings[i].second.scale
+        out[i].angle1 = matchings[i].second.angle
     matchings.empty()
     return out
-    
-    
+
+
 cdef class SiftAlignment:
     cdef siftPar sift_parameters
     cdef map[uint32_t, keypointslist] dictKeyPointsList
     cdef FastRLock lock
     cdef object sem
-#    cdef list[uint32_t] processing
 
     def __cinit__(self):
         default_sift_parameters(self.sift_parameters)
@@ -200,10 +208,10 @@ cdef class SiftAlignment:
         self.lock = FastRLock()
         self.sem = Semaphore(<int>cpu_count())
 #        self.processing = list()
-    
+
     def __dealloc__(self):
         self.clear()
-        
+
     def clear(self):
         """
         Empty the vector of keypoints.
@@ -342,8 +350,8 @@ def asift2(numpy.ndarray in1 not None, numpy.ndarray in2 not None, bool verbose=
         out[i, 2] = matchings[i].second.y
         out[i, 3] = matchings[i].second.x
     return out
-    
-    
+
+
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -685,7 +693,7 @@ def siftn(*listArg, bool verbose=False, bool vs_first=False):
 #Cython implementaation of fast locking
 # author: Stephan Behnel additions from Jerome Kieffer
 # http://code.activestate.com/recipes/577336/
-# C++ version 
+# C++ version
 from cpython cimport pythread
 from cpython.exc cimport PyErr_NoMemory
 from libcpp.list cimport list
@@ -816,7 +824,7 @@ def fimgblur(numpy.ndarray inp not None, float sigma):
     return output
 def shrink(numpy.ndarray[numpy.float32_t, ndim = 2] img not None,float factor):
     d0=img.shape[0]
-    d1 =img.shape[1] 
+    d1 =img.shape[1]
     cdef numpy.ndarray[numpy.float32_t, ndim = 2] output = numpy.empty((int(d0/factor),int(d1/factor)),dtype=numpy.float32)
     sample(<float*> & img[0,0],<float*> & output[0,0], factor, d1, d0)
     return output
