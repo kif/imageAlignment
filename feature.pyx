@@ -64,8 +64,8 @@ cdef packed struct dtype_kp_t:
     numpy.float32_t   x, y, scale, angle
     unsigned char     desc[128]
 
-dtype_match = numpy.dtype([('x0', numpy.float32),('y0', numpy.float32),('scale0', numpy.float32),('angle0', numpy.float32)
-                           ('x1', numpy.float32),('y1', numpy.float32),('scale1', numpy.float32),('angle1', numpy.float32)])
+dtype_match = numpy.dtype([('x0', numpy.float32), ('y0', numpy.float32), ('scale0', numpy.float32), ('angle0', numpy.float32),
+                           ('x1', numpy.float32), ('y1', numpy.float32), ('scale1', numpy.float32), ('angle1', numpy.float32)])
 cdef packed struct dtype_match_t:
     numpy.float32_t   x0, y0, scale0, angle0, x1, y1, scale1, angle1
 
