@@ -34,7 +34,7 @@ cdef extern from "sift/sift.h":
         float MatchXradius
         float MatchYradius
         int noncorrectlylocalized
-    void default_sift_parameters(siftPar par)
+    void default_sift_parameters(siftPar par) nogil
     void compute_sift_keypoints(float * input, keypointslist  keypoints, int width, int height, siftPar par) nogil
     void compute_sift_keypoints_flimage(flimage img, keypointslist  keypoints, siftPar par) nogil
 

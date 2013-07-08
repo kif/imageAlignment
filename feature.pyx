@@ -64,6 +64,11 @@ cdef packed struct dtype_kp_t:
     numpy.float32_t   x, y, scale, angle
     unsigned char     desc[128]
 
+dtype_match = numpy.dtype([('x0', numpy.float32),('y0', numpy.float32),
+                           ('x1', numpy.float32),('y1', numpy.float32)])
+cdef packed struct dtype_match_t:
+    numpy.float32_t   x0, y0, x1, y1
+
 def mycrc(float[:] data):
     return crc32(< char *> & data[0], data.size * sizeof(float))
 
@@ -98,11 +103,10 @@ cdef keypoints2array(keypointslist kpl):
         out_angle[i] = kp.angle
         for j in range(128):
             out_desc[i,j] = <unsigned char> (kp.vec[j])
-##        out[i] = nkp 
     out[:].x = out_x
-    out[:].x = out_x
-    out[:].x = out_x
-    out[:].x = out_x
+    out[:].y = out_y
+    out[:].scale = out_scale
+    out[:].angle = out_angle
     out[:].desc = out_desc
     return out
 
@@ -133,6 +137,55 @@ cdef keypointslist array2keypoints(numpy.ndarray ary):
         kpl.push_back(kp)  
     return kpl
 
+def sift_keypoints(numpy.ndarray img): 
+    """
+    Calculate all keypoints from an image 
+    
+    @param image: 2D numpy array
+    @return: 1D numpyarray of keypoints
+    """   
+    assert img.ndim == 2
+    cdef float[:, :] data = normalize_image(img)
+    cdef keypointslist kp
+    cdef siftPar sift_parameters
+    with nogil:
+        default_sift_parameters(sift_parameters)
+        compute_sift_keypoints(< float *> & data[0, 0], kp, data.shape[1], data.shape[0], sift_parameters)
+    out = keypoints2array(kp)
+    kp.empty()
+#    del kp
+#    del sift_parameters
+    return out
+
+def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2): 
+    """
+    Calculate all keypoints from an image 
+    
+    @param image: 2D numpy array
+    @return: 1D numpyarray of keypoints
+    """   
+    assert nkp1.ndim == 1
+    assert nkp1.ndim == 1
+    assert type(nkp1) == numpy.core.records.recarray
+    assert type(nkp2) == numpy.core.records.recarray
+    cdef keypointslist kp1,kp2
+    cdef matchingslist matchings
+    cdef siftPar sift_parameters
+
+    kp1 = array2keypoints(nkp1)
+    kp2 = array2keypoints(nkp2)
+    with nogil:
+        default_sift_parameters(sift_parameters)
+        compute_sift_matches(kp1, kp2, matchings, sift_parameters);
+    cdef numpy.ndarray[dtype_match_t, ndim = 1] out = numpy.recarray(shape=(matchings.size(), ), dtype=dtype_match)
+    for i in range(matchings.size()):
+        out[i].x0 = matchings[i].first.x
+        out[i].y0 = matchings[i].first.y
+        out[i].x1 = matchings[i].second.x
+        out[i].y1 = matchings[i].second.y
+    matchings.empty()
+    return out
+    
     
 cdef class SiftAlignment:
     cdef siftPar sift_parameters
