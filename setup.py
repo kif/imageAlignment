@@ -58,7 +58,7 @@ rlock_ext = Extension(name="cythreading",
                       )
 
 setup(name='feature',
-      version="0.5.0",
+      version="0.6.0",
       author="Jérôme Kieffer",
       author_email="jerome.kieffer@esrf.eu",
       description='test for feature extraction algorithm like sift, surf, ...',

@@ -88,11 +88,11 @@ cdef keypoints2array(keypointslist kpl):
 #    cdef dtype_kp_t[:] out
 #    cdef numpy.ndarray[dtype_kp_t, ndim=1] out
     out = numpy.recarray(shape=(n,), dtype=dtype_kp)
-    cdef float[:] out_x  = numpy.zeros(n, dtype=numpy.float32)
-    cdef float[:] out_y  = numpy.zeros(n, dtype=numpy.float32)
-    cdef float[:] out_scale = numpy.zeros(n, dtype=numpy.float32)
-    cdef float[:] out_angle  = numpy.zeros(n, dtype=numpy.float32)
-    cdef unsigned char[:,:] out_desc  = numpy.zeros((n,128), dtype=numpy.uint8)
+    cdef float[:] out_x  = numpy.empty(n, dtype=numpy.float32)
+    cdef float[:] out_y  = numpy.empty(n, dtype=numpy.float32)
+    cdef float[:] out_scale = numpy.empty(n, dtype=numpy.float32)
+    cdef float[:] out_angle  = numpy.empty(n, dtype=numpy.float32)
+    cdef unsigned char[:,:] out_desc  = numpy.empty((n,128), dtype=numpy.uint8)
     #numpy.recarray(shape=(n,), dtype=dtype_kp)
 #    cdef dtype_kp_t nkp
     cdef keypoint kp
@@ -170,29 +170,58 @@ def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2):
     @return: 1D numpy record array of matching keypoints
     """
     assert nkp1.ndim == 1
-    assert nkp1.ndim == 1
+    assert nkp2.ndim == 1
     assert type(nkp1) == numpy.core.records.recarray
     assert type(nkp2) == numpy.core.records.recarray
     cdef keypointslist kp1,kp2
     cdef matchingslist matchings
     cdef siftPar sift_parameters
+    cdef int i, j, size
 
     kp1 = array2keypoints(nkp1)
     kp2 = array2keypoints(nkp2)
     with nogil:
         default_sift_parameters(sift_parameters)
         compute_sift_matches(kp1, kp2, matchings, sift_parameters);
-    cdef dtype_match_t[:] out = numpy.recarray(shape=(matchings.size(), ), dtype=dtype_match)
-    for i in range(matchings.size()):
-        out[i].x0 = matchings[i].first.x
-        out[i].y0 = matchings[i].first.y
-        out[i].scale0 = matchings[i].first.scale
-        out[i].angle0 = matchings[i].first.angle
-        out[i].x1 = matchings[i].second.x
-        out[i].y1 = matchings[i].second.y
-        out[i].scale1 = matchings[i].second.scale
-        out[i].angle1 = matchings[i].second.angle
+    size = matchings.size()
+    cdef dtype_kp_t[:,:] out = numpy.recarray(shape=(size, 2), dtype=dtype_kp)
+    cdef float[:] first_x = numpy.empty(size, dtype=numpy.float32)
+    cdef float[:] first_y  = numpy.empty(size, dtype=numpy.float32)
+    cdef float[:] first_scale = numpy.empty(size, dtype=numpy.float32)
+    cdef float[:] first_angle  = numpy.empty(size, dtype=numpy.float32)
+    cdef unsigned char[:,:] first_desc  = numpy.zeros((size,128), dtype=numpy.uint8)
+    cdef float[:] second_x = numpy.empty(size, dtype=numpy.float32)
+    cdef float[:] second_y  = numpy.empty(size, dtype=numpy.float32)
+    cdef float[:] second_scale = numpy.empty(size, dtype=numpy.float32)
+    cdef float[:] second_angle  = numpy.empty(size, dtype=numpy.float32)
+    cdef unsigned char[:,:] second_desc  = numpy.zeros((size,128), dtype=numpy.uint8)
+
+    for i in range(size):
+        first_x[i] = matchings[i].first.x
+        first_y[i] = matchings[i].first.y
+        first_scale[i] = matchings[i].first.scale
+        first_angle[i] = matchings[i].first.angle
+        for j in range(128):
+            first_desc[i,j] = <unsigned char> matchings[i].first.vec[j]
+        second_x[i] = matchings[i].second.x
+        second_y[i] = matchings[i].second.y
+        second_scale[i] = matchings[i].second.scale
+        second_angle[i] = matchings[i].second.angle
+        for j in range(128):
+            second_desc[i,j] = <unsigned char> matchings[i].second.vec[j]
+
     matchings.empty()
+    out[:,0].x = first_x
+    out[:,0].y = first_y
+    out[:,0].scale = first_scale
+    out[:,0].angle = first_angle
+    out[:,0].desc = first_desc
+    out[:,1].x = second_x
+    out[:,1].y = second_y
+    out[:,1].scale = second_scale
+    out[:,1].angle = second_angle
+    out[:,1].desc = second_desc
+
     return out
 
 
@@ -252,7 +281,7 @@ cdef class SiftAlignment:
         @return: list keypoints as a numpy array
         """
         return keypoints2array(self.sift_c(img))
-
+    keypoints = sift
 
     @cython.boundscheck(False)
     def match(self, data1, data2):
