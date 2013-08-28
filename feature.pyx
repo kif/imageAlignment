@@ -184,7 +184,7 @@ def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2):
         default_sift_parameters(sift_parameters)
         compute_sift_matches(kp1, kp2, matchings, sift_parameters);
     size = matchings.size()
-    cdef dtype_kp_t[:,:] out = numpy.recarray(shape=(size, 2), dtype=dtype_kp)
+    out = numpy.recarray(shape=(size, 2), dtype=dtype_kp)
     cdef float[:] first_x = numpy.empty(size, dtype=numpy.float32)
     cdef float[:] first_y  = numpy.empty(size, dtype=numpy.float32)
     cdef float[:] first_scale = numpy.empty(size, dtype=numpy.float32)
@@ -221,7 +221,6 @@ def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2):
     out[:,1].scale = second_scale
     out[:,1].angle = second_angle
     out[:,1].desc = second_desc
-
     return out
 
 
@@ -267,7 +266,7 @@ cdef class SiftAlignment:
             t0 = time.time()
             with nogil:
                 compute_sift_keypoints(< float *> & data[0, 0], kp, data.shape[1], data.shape[0], self.sift_parameters)
-            print("SIFT on image %4ix%4i took %.3fms"%(img.shape[1],img.shape[0],1000.0*(time.time()-t0)))
+#            print("SIFT on image %4ix%4i took %.3fms"%(img.shape[1],img.shape[0],1000.0*(time.time()-t0)))
         with self.lock:
             self.dictKeyPointsList[idx] = kp
         return kp
@@ -295,10 +294,10 @@ cdef class SiftAlignment:
         cdef matchingslist matchings
         if type(data1) == numpy.core.records.recarray and data1.ndim == 1:
             kp1 =  array2keypoints(data1)
-            print kp1.size()
+#            print kp1.size()
         if type(data2) == numpy.core.records.recarray and data2.ndim == 1:
             kp2 =  array2keypoints(data2)
-            print kp2.size()
+#            print kp2.size()
         with nogil:
             compute_sift_matches(kp1, kp2, matchings, self.sift_parameters);
         cdef numpy.ndarray[numpy.float32_t, ndim = 2] out = numpy.zeros((matchings.size(), 4), dtype=numpy.float32)
