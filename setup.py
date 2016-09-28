@@ -1,10 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# coding: utf8
 #
 #    Project: Image Alignment
-#
-#
-#    File: "$Id$"
 #
 #    Copyright (C) European Synchrotron Radiation Facility, Grenoble, France
 #
@@ -58,8 +55,8 @@ rlock_ext = Extension(name="cythreading",
                       )
 
 setup(name='feature',
-      version="0.6.0",
-      author="Jérôme Kieffer",
+      version="0.6.1",
+      author="Jerome Kieffer",
       author_email="jerome.kieffer@esrf.eu",
       description='test for feature extraction algorithm like sift, surf, ...',
       ext_modules=[feature_ext ],

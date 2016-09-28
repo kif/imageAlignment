@@ -25,7 +25,7 @@
 
 __author__ = "Jerome Kieffer"
 __license__ = "GPLv3"
-__date__ = "07/07/2013"
+__date__ = "03/09/2016"
 __copyright__ = "2011-2012, ESRF"
 __contact__ = "jerome.kieffer@esrf.fr"
 __doc__ = "this is a cython wrapper for feature extraction algorithm"
@@ -124,18 +124,13 @@ cdef keypointslist array2keypoints(numpy.ndarray ary):
     cdef keypoint kp
     cdef dtype_kp_t nkp
     cdef keypointslist kpl # = new keypointslist()
-    cdef float[:] x = ary[:].x
-    cdef float[:] y = ary[:].y
-    cdef float[:] scale = ary[:].scale
-    cdef float[:] angle = ary[:].angle
-    cdef unsigned char[:,:] desc = ary[:].desc
     for i in range(n):
-        kp.x = x[i]
-        kp.y = y[i]
-        kp.scale =  scale[i]
-        kp.angle = angle[i]
+        kp.x = ary[i][0]
+        kp.y = ary[i][1]
+        kp.scale =  ary[i][2]
+        kp.angle = ary[i][3]
         for j in range(128):
-            kp.vec[j] = desc[i,j]
+            kp.vec[j] = ary[i][4][j]
         kpl.push_back(kp)
     return kpl
 
@@ -171,8 +166,6 @@ def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2):
     """
     assert nkp1.ndim == 1
     assert nkp2.ndim == 1
-    assert type(nkp1) == numpy.core.records.recarray
-    assert type(nkp2) == numpy.core.records.recarray
     cdef keypointslist kp1,kp2
     cdef matchingslist matchings
     cdef siftPar sift_parameters
@@ -229,7 +222,7 @@ def sift_match(numpy.ndarray nkp1,numpy.ndarray nkp2):
 def sift_orsa(inp not None, shape=None, bint verbose=0):
     """
     Call ORSA (keypoint checking) on sift matched keypoints
-    
+
     @param inp: n*2 array representing of keypoints.
     @param shape: shape of the input images (unless guessed)
     @type shape: 2-tuple of integers
@@ -252,8 +245,8 @@ def sift_orsa(inp not None, shape=None, bint verbose=0):
     cdef int width, heigh
     if shape is None:
         # keypoints are at least at 5  pixels of the border
-        width = int(5 + max(inp[:, 0].x.max(), inp[:, 1].x.max())) 
-        heigh = int(5 + max(inp[:, 0].y.max(), inp[:, 1].y.max())) 
+        width = int(5 + max(inp[:, 0].x.max(), inp[:, 1].x.max()))
+        heigh = int(5 + max(inp[:, 0].y.max(), inp[:, 1].y.max()))
     elif hasattr(shape, "__len__") and len(shape) >= 2:
         width = int(shape[1])
         heigh = int(shape[0])
@@ -278,7 +271,7 @@ def sift_orsa(inp not None, shape=None, bint verbose=0):
 #    with nogil:
 #        for i in range(num_matchings):
 #            out_index[i] = < int > index[i]
-    out_index = numpy.array(index, dtype=numpy.int32) 
+    out_index = numpy.array(index, dtype=numpy.int32)
     out = inp[out_index]
     return out
 
