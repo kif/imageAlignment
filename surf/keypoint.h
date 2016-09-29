@@ -13,8 +13,8 @@
 #include <math.h>
 #include "lib.h"
 #include "image.h"
-#include <omp.h>
-
+/*#include <omp.h>
+*/
 
 /** 
  \class keyPoint For the keypoint.

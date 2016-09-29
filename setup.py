@@ -45,8 +45,8 @@ feature_ext = Extension(name="feature",
                     sources=src + glob.glob("surf/*.cpp") + glob.glob("sift/*.cpp") + glob.glob("asift/*.cpp") + glob.glob("orsa/*.cpp") + glob.glob("image/*.cpp") + ["crc32.cpp"],
                     include_dirs=get_numpy_include_dirs(),
                     language="c++",
-                    extra_compile_args=['-fopenmp', "-msse4.2"],
-                    extra_link_args=['-fopenmp'],
+                    extra_compile_args=[],
+                    extra_link_args=[],
                     )
 
 rlock_ext = Extension(name="cythreading",

@@ -31,38 +31,9 @@ uint32_t slowcrc(char *str, uint32_t len) {
 	return ~lcrc;
 }
 
-uint32_t fastcrc(const char *str, uint32_t len) {
-	uint64_t q=len/sizeof(uint64_t),
-		     r=len%sizeof(uint64_t),
-		     *p=(uint64_t*)str,
-		     crc64=0;
-	uint32_t crc=0;
-
-	while (q--) {
-		crc64 = _mm_crc32_u64(crc64,*p);
-		p++;
-	}
-
-	str=(char*)p;
-	crc=crc64;
-	while (r--) {
-		crc = _mm_crc32_u8(crc,*str);
-		str++;
-	}
-
-	return crc;
-}
-
 uint32_t crc32(char *str, uint32_t len) {
-  uint32_t eax, ebx, ecx, edx;
-  __get_cpuid(1, &eax, &ebx, &ecx, &edx);
-
-  if (ecx & bit_SSE4_2){
-	    return fastcrc(str,len);
-  	 }else{
   		 if (!initialized){
   			slowcrc_init();
   		 }
   		 return slowcrc(str,len);
-  	 }
 }

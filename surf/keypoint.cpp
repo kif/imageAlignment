@@ -12,8 +12,8 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
-#include <omp.h>
-
+/*#include <omp.h>
+*/
 
 keyPoint::keyPoint(float a, float b, float c,  float e, bool f)
 {
