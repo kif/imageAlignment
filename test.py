@@ -28,7 +28,7 @@ def siftManyImg(fn, nbcpu=None,cut=2000):
         lf=[fn[0]]+[fn[j+1] for j in range(i*nbcpu,(i+1)*nbcpu) if j<len(fn)-1]
         print lf
         ld=[img2array(j)[cut:] for j in lf]
-        dr=feature.sift(*ld,verbose=False,vs_first=True)
+        dr=feature.siftn(*ld,verbose=False,vs_first=True)
         for k,v in dr.items():
             result[(lf[k[0]],lf[k[1]])]=v
             print(lf[k[0]],lf[k[1]],calcShift(v))
@@ -110,7 +110,7 @@ def stitch(*img):
     if len(img) <= 1:
         return img
 
-    d = feature.sift(*img, verbose=True)
+    d = feature.siftn(*img, verbose=True)
     t0 = time.time()
     for i in d:
         print i, "calcShift", calcShift(d[i])
