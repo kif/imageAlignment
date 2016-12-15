@@ -3,6 +3,7 @@
 import sys
 import feature
 import scipy
+import scipy.misc
 import numpy
 import matplotlib
 from pylab import *
@@ -287,17 +288,17 @@ class setOfOffsets(object):
         return d
 
 if __name__ == "__main__":
-    #lena1 = numpy.zeros((512, 512))
-    #scipy.lena()
-    #lena1[100:150, 160:200] = 1
+    #face1 = numpy.zeros((512, 512))
+    #scipy.misc.face(gray=True)
+    #face1[100:150, 160:200] = 1
     ao1, ao2 = 5, 3
     print("Absolute offset is %s,%s" % (ao1, ao2))
-    lena1 = scipy.lena()
-    lena2 = numpy.zeros_like(lena1)
-    lena2[ao1:, ao2:] = lena1[:-ao1, :-ao2]
-#    out = Visual_SURF(lena1, lena2)
+    face1 = scipy.misc.face(gray=True)
+    face2 = numpy.zeros_like(face1)
+    face2[ao1:, ao2:] = face1[:-ao1, :-ao2]
+#    out = Visual_SURF(face1, face2)
     """
-    out = feature.surf2(lena1, lena2, verbose=1)
+    out = feature.surf2(face1, face2, verbose=1)
     print "clacShift", calcShift(out)
 
 #    raw_input("Enter to continue")
@@ -305,8 +306,8 @@ if __name__ == "__main__":
 #    print "SURF: %s keypoint; ORSA -> %s" % (out.shape[0], out2.shape[0])
 #    out = out2
     print "*" * 80
-#    out = feature.sift2(lena1, lena2, verbose=1)
-    out = Visual_SIFT(lena1, lena2)
+#    out = feature.sift2(face1, face2, verbose=1)
+    out = Visual_SIFT(face1, face2)
     print "clacShift", calcShift(out)
     out2 = feature.reduce_orsa(out)
     print "SIFT: %s keypoint; ORSA -> %s" % (out.shape[0], out2.shape[0])
@@ -315,18 +316,18 @@ if __name__ == "__main__":
     raw_input("Enter to continue")
 
     print "*" * 80
-#    out = feature.asift2(lena1, lena2, verbose=0)
-#    out = Visual_ASIFT(lena1, lena2)
+#    out = feature.asift2(face1, face2, verbose=0)
+#    out = Visual_ASIFT(face1, face2)
 #    print "Mean", (out[:, 0] - out[:, 2]).mean(), (out[:, 1] - out[:, 3]).mean()
 #    print "Median", numpy.median(out[:, 0] - out[:, 2]), numpy.median(out[:, 1] - out[:, 3])
 #    raw_input("Enter to continue")
 #    print "clacShift", calcShift(out)
     """
     '''
-    l1 = lena1[:300, :300]
-    l2 = lena1[:300, 200:] + 10
-    l3 = lena1[200:, 200:] + 20
-    l4 = lena1[200:, :300] + 30
+    l1 = face1[:300, :300]
+    l2 = face1[:300, 200:] + 10
+    l3 = face1[200:, 200:] + 20
+    l4 = face1[200:, :300] + 30
     d = feature.sift(l1, l2, l3, l4, verbose=True)
     for i in d:
         print i, "clacShift", calcShift(d[i])
@@ -340,25 +341,25 @@ if __name__ == "__main__":
                 print k
     '''
     if len(sys.argv) < 2:
-        l00 = lena1[:150, :150] + 0
-        l01 = lena1[:150, 100:250] + 4
-        l02 = lena1[:150, 200:350] + 8
-        l03 = lena1[:150, 300:] + 12
+        l00 = face1[:150, :150] + 0
+        l01 = face1[:150, 100:250] + 4
+        l02 = face1[:150, 200:350] + 8
+        l03 = face1[:150, 300:] + 12
 
-        l10 = lena1[100:250, :150] + 16
-        l11 = lena1[100:250, 100:250] + 20
-        l12 = lena1[100:250, 200:350] + 24
-        l13 = lena1[100:250, 300:] + 28
+        l10 = face1[100:250, :150] + 16
+        l11 = face1[100:250, 100:250] + 20
+        l12 = face1[100:250, 200:350] + 24
+        l13 = face1[100:250, 300:] + 28
 
-        l20 = lena1[200:350, :150] + 32
-        l21 = lena1[200:350, 100:250] + 36
-        l22 = lena1[200:350, 200:350] + 40
-        l23 = lena1[200:350, 300:] + 44
+        l20 = face1[200:350, :150] + 32
+        l21 = face1[200:350, 100:250] + 36
+        l22 = face1[200:350, 200:350] + 40
+        l23 = face1[200:350, 300:] + 44
 
-        l30 = lena1[300:, :150] + 48
-        l31 = lena1[300:, 100:250] + 52
-        l32 = lena1[300:, 200:350] + 56
-        l33 = lena1[300:, 300:] + 60
+        l30 = face1[300:, :150] + 48
+        l31 = face1[300:, 100:250] + 52
+        l32 = face1[300:, 200:350] + 56
+        l33 = face1[300:, 300:] + 60
 
         l = (l00, l01, l02, l03, l10, l11, l12, l13, l20, l21, l22, l23, l30, l31, l32, l33)
     else:
